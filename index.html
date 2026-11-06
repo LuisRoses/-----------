@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voltix — магазин электроники</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+    <div class="container header__inner">
+      <a href="#top" class="logo">Voltix</a>
+      <input id="search" class="search" type="search" placeholder="Найти товар" aria-label="Поиск товаров">
+      <button id="cart-btn" class="cart-btn" type="button">
+        Корзина <span id="cart-count" class="cart-btn__count">0</span>
+      </button>
+    </div>
+  </header>
+
+  <section class="hero" id="top">
+    <div class="container hero__inner">
+      <h1>Техника для дома, работы и игр</h1>
+      <p>Смартфоны, ноутбуки, телевизоры и всё, что к ним нужно. Выберите категорию или найдите товар по названию.</p>
+      <div id="hero-categories" class="hero__cats"></div>
+    </div>
+  </section>
+
+  <main class="container catalog" id="catalog">
+    <div class="catalog__head">
+      <h2 id="catalog-title">Все товары</h2>
+      <select id="sort" class="sort" aria-label="Сортировка">
+        <option value="default">Сначала популярные</option>
+        <option value="price-asc">Сначала дешёвые</option>
+        <option value="price-desc">Сначала дорогие</option>
+      </select>
+    </div>
+    <div id="filters" class="filters"></div>
+    <div id="products" class="grid"></div>
+  </main>
+
+ <footer class="footer">
+    <div class="container footer__inner">
+      <div>
+        <strong>Voltix</strong>
+        <p>Учебный проект интернет-магазина электроники.</p>
+      </div>
+      <div>
+        <strong>Доставка и возврат</strong>
+        <p>Доставка за 1–3 дня. Возврат в течение 14 дней.</p>
+      </div>
+      <div>
+        <strong>Контакты</strong>
+        <p>info@voltix.example<br>Пн–Пт, 9:00–18:00</p>
+      </div>
+    </div>
+  </footer>
+
+  <div id="overlay" class="overlay"></div>
+  <aside id="cart" class="cart" aria-label="Корзина">
+    <div class="cart__head">
+      <h2>Корзина</h2>
+      <button id="cart-close" class="icon-btn" type="button" aria-label="Закрыть корзину">✕</button>
+    </div>
+    <div id="cart-items" class="cart__items"></div>
+    <div class="cart__foot">
+      <div class="cart__total"><span>Итого</span><strong id="cart-total">0</strong></div>
+      <button id="checkout-btn" class="btn btn--wide" type="button">Оформить заказ</button>
+    </div>
+  </aside>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal__box">
+      <button id="modal-close" class="icon-btn modal__close" type="button" aria-label="Закрыть">✕</button>
+ 
+      <form id="order-form" class="form">
+        <h2 id="modal-title">Оформление заказа</h2>
+        <label>Имя
+          <input name="name" type="text" required minlength="2" autocomplete="name">
+        </label>
+        <label>Телефон
+          <input name="phone" type="tel" required autocomplete="tel">
+        </label>
+        <label>Адрес доставки
+          <input name="address" type="text" required autocomplete="street-address">
+        </label>
+        <label>Способ оплаты
+          <select name="payment">
+            <option>Картой при получении</option>
+            <option>Наличными при получении</option>
+            <option>Онлайн-оплата</option>
+          </select>
+        </label>
+        <p class="form__sum">К оплате: <strong id="order-total">0</strong></p>
+        <button class="btn btn--wide" type="submit">Подтвердить заказ</button>
+      </form>
+ 
+      <div id="order-success" class="success" hidden>
+        <h2>Заказ принят</h2>
+        <p>Номер заказа: <strong id="order-number"></strong>. Мы свяжемся с вами для подтверждения.</p>
+        <button id="success-close" class="btn" type="button">Вернуться в каталог</button>
+      </div>
+    </div>
+  </div>
+ 
+  <script src="script.js"></script>
+</body>
+</html>
