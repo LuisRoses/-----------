@@ -3,25 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#141a26">
   <title>Voltix — магазин электроники</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header class="header">
+  <header class="header">
     <div class="container header__inner">
-      <a href="#top" class="logo">Voltix</a>
+      <a href="#top" class="logo" id="logo-link">Voltix</a>
       <input id="search" class="search" type="search" placeholder="Найти товар" aria-label="Поиск товаров">
-      <button id="cart-btn" class="cart-btn" type="button">
-        Корзина <span id="cart-count" class="cart-btn__count">0</span>
-      </button>
+
+      <div class="header__actions">
+        <div id="account-guest">
+          <button id="auth-open" class="auth-btn" type="button">Войти / Регистрация</button>
+        </div>
+
+        <div id="account-user" class="account-user" hidden>
+          <div class="account-identity">
+            <span id="account-avatar" class="avatar" aria-hidden="true">V</span>
+            <span id="account-nickname" class="account-nickname"></span>
+          </div>
+          <button id="account-menu-btn" class="menu-btn" type="button" aria-label="Открыть меню аккаунта" aria-expanded="false">
+            <span></span><span></span><span></span>
+          </button>
+        </div>
+
+        <button id="theme-toggle" class="theme-btn" type="button" aria-label="Включить тёмную тему" title="Включить тёмную тему">
+          <span class="theme-btn__icon" aria-hidden="true">🌙</span>
+          <span class="theme-btn__label">Тема</span>
+        </button>
+        <button id="cart-btn" class="cart-btn" type="button">
+          Корзина <span id="cart-count" class="cart-btn__count">0</span>
+        </button>
+      </div>
     </div>
   </header>
 
-  <section class="hero" id="top">
+  <section class="hero" id="hero">
     <div class="container hero__inner">
+      <p class="eyebrow">ТВОЙ МАГАЗИН ТЕХНИКИ</p>
       <h1>Техника для дома, работы и игр</h1>
       <p>Смартфоны, ноутбуки, телевизоры и всё, что к ним нужно. Выберите категорию или найдите товар по названию.</p>
       <div id="hero-categories" class="hero__cats"></div>
@@ -30,18 +53,90 @@
 
   <main class="container catalog" id="catalog">
     <div class="catalog__head">
-      <h2 id="catalog-title">Все товары</h2>
-      <select id="sort" class="sort" aria-label="Сортировка">
-        <option value="default">Сначала популярные</option>
-        <option value="price-asc">Сначала дешёвые</option>
-        <option value="price-desc">Сначала дорогие</option>
-      </select>
+      <div>
+        <p class="eyebrow eyebrow--dark">КАТАЛОГ VOLTIX</p>
+        <h2 id="catalog-title">Все товары</h2>
+      </div>
+      <div class="catalog__tools">
+        <select id="sort" class="sort" aria-label="Сортировка">
+          <option value="default">Сначала популярные</option>
+          <option value="price-asc">Сначала дешёвые</option>
+          <option value="price-desc">Сначала дорогие</option>
+        </select>
+        <button id="create-product-cta" class="btn btn--sell" type="button">＋ Добавить товар</button>
+      </div>
     </div>
     <div id="filters" class="filters"></div>
     <div id="products" class="grid"></div>
   </main>
 
- <footer class="footer">
+  <section id="my-products-page" class="container page-view" hidden>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow eyebrow--dark">ЛИЧНЫЙ КАБИНЕТ</p>
+        <h1>Мои товары</h1>
+        <p class="page-subtitle">Здесь находятся товары, которые вы добавили в Voltix.</p>
+      </div>
+      <div class="page-heading__actions">
+        <button id="my-products-back" class="btn btn--light" type="button">← В каталог</button>
+        <button id="my-products-add" class="btn" type="button">＋ Добавить товар</button>
+      </div>
+    </div>
+    <div id="my-products-grid" class="grid"></div>
+  </section>
+
+  <section id="create-product-page" class="container page-view" hidden>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow eyebrow--dark">МАРКЕТПЛЕЙС VOLTIX</p>
+        <h1>Новый товар</h1>
+        <p class="page-subtitle">Заполните информацию — товар появится в общем каталоге.</p>
+      </div>
+      <button id="create-back" class="btn btn--light" type="button">← Назад</button>
+    </div>
+
+    <form id="create-product-form" class="form form--product">
+      <label>Название товара
+        <input name="name" type="text" required minlength="2" maxlength="70" placeholder="Например, Смартфон Nova X">
+      </label>
+      <div class="form__row">
+        <label>Категория
+          <select name="category" required>
+            <option value="Смартфоны">Смартфоны</option>
+            <option value="Ноутбуки">Ноутбуки</option>
+            <option value="Телевизоры">Телевизоры</option>
+            <option value="Наушники">Наушники</option>
+            <option value="Игровые приставки">Игровые приставки</option>
+            <option value="Бытовая техника">Бытовая техника</option>
+            <option value="Аксессуары">Аксессуары</option>
+          </select>
+        </label>
+        <label>Цена ($)
+          <input name="price" type="number" required min="0.01" max="1000000" step="0.01" placeholder="99.99">
+        </label>
+      </div>
+      <label>Ссылка на изображение <span class="optional">(необязательно)</span>
+        <input name="image" type="url" maxlength="500" placeholder="https://example.com/image.jpg">
+      </label>
+      <label>Описание
+        <textarea name="description" required minlength="5" maxlength="3000" rows="5" placeholder="Расскажите о характеристиках, особенностях и состоянии товара"></textarea>
+      </label>
+      <div class="form__actions">
+        <button class="btn" type="submit">Опубликовать товар</button>
+        <button id="create-cancel" class="btn btn--light" type="button">Отмена</button>
+      </div>
+      <p class="form-note">Публикация учебная: товары сохраняются только в этом браузере.</p>
+    </form>
+  </section>
+
+  <section id="product-detail-page" class="container page-view" hidden>
+    <div class="product-detail__top">
+      <button id="product-detail-back" class="btn btn--light" type="button">← Назад к товарам</button>
+    </div>
+    <div id="product-detail-content"></div>
+  </section>
+
+  <footer class="footer">
     <div class="container footer__inner">
       <div>
         <strong>Voltix</strong>
@@ -58,23 +153,108 @@
     </div>
   </footer>
 
+  
   <div id="overlay" class="overlay"></div>
-  <aside id="cart" class="cart" aria-label="Корзина">
+  <aside id="cart" class="cart" aria-label="Корзина" aria-modal="true">
     <div class="cart__head">
       <h2>Корзина</h2>
       <button id="cart-close" class="icon-btn" type="button" aria-label="Закрыть корзину">✕</button>
     </div>
     <div id="cart-items" class="cart__items"></div>
     <div class="cart__foot">
-      <div class="cart__total"><span>Итого</span><strong id="cart-total">0</strong></div>
+      <div class="cart__total"><span>Итого</span><strong id="cart-total">$0</strong></div>
       <button id="checkout-btn" class="btn btn--wide" type="button">Оформить заказ</button>
     </div>
   </aside>
 
+  
+  <div id="account-overlay" class="account-overlay"></div>
+  <aside id="account-menu" class="account-menu" aria-label="Меню аккаунта">
+    <div class="account-menu__head">
+      <div class="account-menu__profile">
+        <span id="menu-avatar" class="avatar avatar--large">V</span>
+        <div>
+          <strong id="menu-nickname">Пользователь</strong>
+          <span id="menu-email" class="muted-small"></span>
+        </div>
+      </div>
+      <button id="account-menu-close" class="icon-btn" type="button" aria-label="Закрыть меню">✕</button>
+    </div>
+    <nav class="account-nav" aria-label="Разделы аккаунта">
+      <button id="menu-my-products" type="button"><span>▣</span> Мои товары</button>
+      <button id="menu-add-product" type="button"><span>＋</span> Добавить товар</button>
+    </nav>
+    <div class="account-menu__bottom">
+      <button id="logout-btn" class="logout-btn" type="button"><span>↪</span> Выйти из аккаунта</button>
+    </div>
+  </aside>
+
+  
+  <div id="auth-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="modal__box auth-modal__box">
+      <button id="auth-close" class="icon-btn modal__close" type="button" aria-label="Закрыть">✕</button>
+      <div class="auth-brand">Voltix</div>
+      <h2 id="auth-title">С возвращением!</h2>
+      <p class="auth-intro">Войдите, чтобы управлять своими товарами.</p>
+      <div class="auth-tabs">
+        <button class="auth-tab is-active" type="button" data-auth-mode="login">Вход</button>
+        <button class="auth-tab" type="button" data-auth-mode="register">Регистрация</button>
+      </div>
+
+      <form id="login-form" class="form auth-form">
+        <label>Электронная почта
+          <input name="email" type="email" required autocomplete="email" placeholder="name@example.com">
+        </label>
+        <label>Пароль
+          <input name="password" type="password" required minlength="8" autocomplete="current-password" placeholder="Не менее 8 символов">
+        </label>
+        <button class="btn btn--wide" type="submit">Войти</button>
+      </form>
+
+      <form id="register-form" class="form auth-form" hidden>
+        <label>Никнейм
+          <input name="nickname" type="text" required minlength="2" maxlength="24" autocomplete="nickname" placeholder="Как вас называть?">
+        </label>
+        <label>Электронная почта
+          <input name="email" type="email" required autocomplete="email" placeholder="name@example.com">
+        </label>
+        <label>Ссылка на аватар <span class="optional">(необязательно)</span>
+          <input name="avatar" type="url" maxlength="500" placeholder="https://example.com/avatar.png">
+        </label>
+        <label>Пароль
+          <input name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="Не менее 8 символов">
+        </label>
+        <label>Повторите пароль
+          <input name="passwordConfirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Введите пароль ещё раз">
+        </label>
+        <button class="btn btn--wide" type="submit">Создать аккаунт</button>
+      </form>
+      <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
+      <p class="form-note">Демо-аккаунт хранится только в этом браузере. Не используйте настоящий пароль.</p>
+    </div>
+  </div>
+
+  <!-- Изменение цены -->
+  <div id="price-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="price-title">
+    <div class="modal__box price-modal__box">
+      <button id="price-close" class="icon-btn modal__close" type="button" aria-label="Закрыть">✕</button>
+      <form id="price-form" class="form">
+        <h2 id="price-title">Изменить цену</h2>
+        <label>Новая цена ($)
+          <input name="price" type="number" required min="0.01" max="1000000" step="0.01">
+        </label>
+        <div class="form__actions">
+          <button class="btn" type="submit">Сохранить</button>
+          <button id="price-cancel" class="btn btn--light" type="button">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Оформление заказа -->
   <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal__box">
       <button id="modal-close" class="icon-btn modal__close" type="button" aria-label="Закрыть">✕</button>
- 
       <form id="order-form" class="form">
         <h2 id="modal-title">Оформление заказа</h2>
         <label>Имя
@@ -93,18 +273,18 @@
             <option>Онлайн-оплата</option>
           </select>
         </label>
-        <p class="form__sum">К оплате: <strong id="order-total">0</strong></p>
+        <p class="form__sum">К оплате: <strong id="order-total">$0</strong></p>
         <button class="btn btn--wide" type="submit">Подтвердить заказ</button>
       </form>
- 
       <div id="order-success" class="success" hidden>
         <h2>Заказ принят</h2>
-        <p>Номер заказа: <strong id="order-number"></strong>. Мы свяжемся с вами для подтверждения.</p>
+        <p>Номер заказа: <strong id="order-number"></strong>. Это демонстрационный заказ — данные никуда не отправляются.</p>
         <button id="success-close" class="btn" type="button">Вернуться в каталог</button>
       </div>
     </div>
   </div>
- 
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="script.js"></script>
 </body>
 </html>
