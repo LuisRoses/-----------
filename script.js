@@ -36,6 +36,7 @@ const baseProducts = [
 ];
 
 const $ = (id) => document.getElementById(id);
+document.documentElement.classList.add("motion-enabled");
 const money = (value) => CURRENCY + Number(value || 0).toLocaleString("ru-RU", {
   minimumFractionDigits: Number(value) % 1 ? 2 : 0,
   maximumFractionDigits: 2
@@ -118,7 +119,9 @@ function showToast(message, type = "success") {
   const toast = $("toast");
   if (!toast) return;
   toast.textContent = message;
-  toast.className = `toast is-visible ${type === "error" ? "toast--error" : ""}`;
+  toast.className = `toast ${type === "error" ? "toast--error" : ""}`;
+  void toast.offsetWidth;
+  toast.classList.add("is-visible");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 3000);
 }
@@ -148,6 +151,52 @@ function bindImageFallbacks(root) {
       image.replaceWith(fallback);
     }, { once: true });
   });
+}
+
+
+
+let motionObserver = null;
+function initScrollAnimations(root = document) {
+  const elements = [];
+  if (root.matches?.(".motion-reveal")) elements.push(root);
+  elements.push(...root.querySelectorAll(".motion-reveal"));
+  if (!elements.length) return;
+
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion || !("IntersectionObserver" in window)) {
+    elements.forEach((element) => element.classList.add("is-visible"));
+    return;
+  }
+
+  if (!motionObserver) {
+    motionObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -35px 0px" });
+  }
+
+  elements.forEach((element) => {
+    if (element.dataset.motionObserved === "true") return;
+    element.dataset.motionObserved = "true";
+    motionObserver.observe(element);
+  });
+}
+
+
+function replayViewAnimation(element) {
+  if (!element || element.hidden) return;
+  element.classList.remove("view-enter");
+  void element.offsetWidth;
+  element.classList.add("view-enter");
+  const finish = (event) => {
+    if (event.target !== element) return;
+    element.classList.remove("view-enter");
+    element.removeEventListener("animationend", finish);
+  };
+  element.addEventListener("animationend", finish);
 }
 
 function getProduct(id) {
@@ -277,6 +326,7 @@ function openProduct(productId, pushHistory = true) {
   $("product-detail-page").hidden = false;
   $("search").value = "";
   renderProductDetails(product);
+  replayViewAnimation($("product-detail-page"));
   document.title = `${product.name} — Voltix`;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -298,6 +348,9 @@ function applyTheme(theme, persist = true) {
   const button = $("theme-toggle");
   if (button) {
     const dark = normalized === "dark";
+    button.classList.remove("theme-changing");
+    void button.offsetWidth;
+    button.classList.add("theme-changing");
     button.querySelector(".theme-btn__icon").textContent = dark ? "☀️" : "🌙";
     button.querySelector(".theme-btn__label").textContent = dark ? "Светлая" : "Тёмная";
     button.setAttribute("aria-label", dark ? "Включить светлую тему" : "Включить тёмную тему");
@@ -324,12 +377,12 @@ function initTheme() {
 
 function renderFilters() {
   const names = ["Все", ...Object.keys(categories)];
-  filtersEl.innerHTML = names.map((name) => `
-    <button class="chip ${name === activeCategory ? "is-active" : ""}" type="button" data-category="${escapeHTML(name)}">${escapeHTML(name)}</button>
+  filtersEl.innerHTML = names.map((name, index) => `
+    <button class="chip ${name === activeCategory ? "is-active" : ""}" style="--i:${index}" type="button" data-category="${escapeHTML(name)}">${escapeHTML(name)}</button>
   `).join("");
 
-  heroCatsEl.innerHTML = Object.keys(categories).map((name) => `
-    <button class="hero__cat" type="button" data-category="${escapeHTML(name)}">
+  heroCatsEl.innerHTML = Object.keys(categories).map((name, index) => `
+    <button class="hero__cat" style="--i:${index}" type="button" data-category="${escapeHTML(name)}">
       <span aria-hidden="true">${categories[name].icon}</span> ${escapeHTML(name)}
     </button>
   `).join("");
@@ -356,7 +409,7 @@ function productCard(product, index, ownerControls = false) {
     </div>` : "";
 
   return `
-    <article class="card" style="--i:${Math.min(index, 8)}" data-product-card="${escapeHTML(product.id)}" tabindex="0" role="link" aria-label="Подробнее о товаре: ${escapeHTML(product.name)}">
+    <article class="card motion-reveal" style="--i:${Math.min(index, 8)}" data-product-card="${escapeHTML(product.id)}" tabindex="0" role="link" aria-label="Подробнее о товаре: ${escapeHTML(product.name)}">
       <div class="card__stage" style="--tint:${category.tint}">${productImage(product)}</div>
       <div class="card__body">
         <div class="card__meta"><span class="card__cat">${escapeHTML(product.category)}</span>${ownBadge}</div>
@@ -380,6 +433,7 @@ function renderProducts() {
   }
   productsEl.innerHTML = list.map((product, index) => productCard(product, index)).join("");
   bindImageFallbacks(productsEl);
+  initScrollAnimations(productsEl);
 }
 
 function renderMyProducts() {
@@ -397,6 +451,7 @@ function renderMyProducts() {
   }
   grid.innerHTML = mine.map((product, index) => productCard(product, index, true)).join("");
   bindImageFallbacks(grid);
+  initScrollAnimations(grid);
 }
 
 function getTotals() {
@@ -414,11 +469,11 @@ function getTotals() {
 
 function renderCart() {
   const ids = Object.keys(cart).filter((id) => getProduct(id) && Number(cart[id]) > 0);
-  cartItemsEl.innerHTML = ids.length ? ids.map((id) => {
+  cartItemsEl.innerHTML = ids.length ? ids.map((id, index) => {
     const product = getProduct(id);
     const category = categories[product.category] || { tint: "#e7ecf5" };
     return `
-      <div class="cart-item">
+      <div class="cart-item" style="--i:${index}">
         <div class="cart-item__icon" style="--tint:${category.tint}">${productImage(product)}</div>
         <div class="cart-item__details">
           <div class="cart-item__name">${escapeHTML(product.name)}</div>
@@ -542,8 +597,7 @@ function showAuthMessage(message, type = "error") {
   element.className = `form-message ${type === "error" ? "form-message--error" : "form-message--success"}`;
 }
 
-// Пароль в демо-версии не хранится открытым текстом: используется PBKDF2-хеш.
-// Для настоящего сайта аккаунты и проверка паролей должны находиться на сервере.
+
 async function hashPassword(password, saltBase64) {
   if (!window.crypto?.subtle || !window.crypto?.getRandomValues) {
     throw new Error("Для регистрации откройте сайт через HTTPS или локальный сервер (например, Live Server).");
@@ -671,6 +725,8 @@ function showCatalog(updateHistory = true) {
   $("product-detail-page").hidden = true;
   $("search").placeholder = "Найти товар";
   renderProducts();
+  replayViewAnimation($("hero"));
+  replayViewAnimation($("catalog"));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -685,6 +741,7 @@ function showMyProducts() {
   $("create-product-page").hidden = true;
   $("product-detail-page").hidden = true;
   renderMyProducts();
+  replayViewAnimation($("my-products-page"));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -699,6 +756,7 @@ function showCreateProduct() {
   $("create-product-page").hidden = false;
   $("product-detail-page").hidden = true;
   $("create-product-form").reset();
+  replayViewAnimation($("create-product-page"));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 

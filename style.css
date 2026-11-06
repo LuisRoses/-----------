@@ -9,7 +9,7 @@
   --danger: #d94b58;
   --surface-soft: #f7f8fb;
   --accent-soft: #e9edff;
-  /* Фон hero не должен зависеть от --ink: в тёмной теме --ink является светлым цветом текста. */
+  
   --hero-bg: radial-gradient(circle at 80% 15%, #29385c 0, transparent 36%), #141a26;
   --hero-text: #ffffff;
   --hero-muted: #b9c2d3;
@@ -104,7 +104,7 @@ a { color: inherit; text-decoration: none; }
 .card__cat { color: var(--muted); font-size: .82rem; font-weight: 600; }
 .product-badge { padding: 3px 7px; border-radius: 999px; background: #eef1ff; color: var(--accent); font-size: .64rem; font-weight: 800; white-space: nowrap; }
 .card h3 { margin-top: 5px; font-size: 1.06rem; line-height: 1.35; }
-.card__desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; flex: 1; margin-top: 7px; color: var(--muted); font-size: .9rem; }
+.card__desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; flex: 1; margin-top: 7px; color: var(--muted); font-size: .9rem; }
 .card__bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 17px; }
 .price { font-size: 1.25rem; font-weight: 800; letter-spacing: -.03em; white-space: nowrap; }
 .owner-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -194,7 +194,7 @@ a { color: inherit; text-decoration: none; }
 .link-btn { border: 0; background: none; color: var(--muted); font-size: .8rem; text-decoration: underline; }
 .link-btn:hover { color: var(--ink); }
 
-/* Меню аккаунта */
+
 .account-overlay { position: fixed; inset: 0; z-index: 55; background: rgba(10,14,22,.45); opacity: 0; pointer-events: none; transition: opacity .2s; }
 .account-overlay.is-open { opacity: 1; pointer-events: auto; }
 .account-menu { position: fixed; top: 0; right: 0; bottom: 0; z-index: 60; display: flex; flex-direction: column; width: min(360px,100%); padding: 20px; background: var(--surface); box-shadow: -12px 0 40px rgba(10,14,22,.12); transform: translateX(105%); transition: transform .25s ease; }
@@ -212,7 +212,7 @@ a { color: inherit; text-decoration: none; }
 .logout-btn span { color: #c33c4a; }
 .logout-btn:hover { background: #fff0f1; }
 
-/* Модальные окна */
+
 .modal { position: fixed; inset: 0; z-index: 75; display: none; place-items: center; overflow-y: auto; padding: 16px; background: rgba(10,14,22,.56); }
 .modal.is-open { display: grid; animation: fade .18s ease both; }
 .modal__box { position: relative; width: min(460px,100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 30px; border-radius: var(--radius); background: var(--surface); box-shadow: 0 20px 70px rgba(0,0,0,.18); animation: pop .25s ease both; }
@@ -283,7 +283,7 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
 .page-view:not([hidden]) { animation: pageEnter .32s ease both; }
 @keyframes pageEnter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
-
+/* Тёмная тема */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0d1422;
@@ -296,7 +296,7 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
   --accent-dark: #6b87f4;
   --danger: #ff7885;
   --accent-soft: #27365b;
-  
+  /* В тёмном режиме баннер остаётся глубоким тёмно-синим, а не становится белым. */
   --hero-bg: radial-gradient(circle at 80% 15%, rgba(52, 79, 132, .72) 0, transparent 39%), linear-gradient(135deg, #080f1c 0%, #101b2e 58%, #152541 100%);
   --hero-text: #f7f9ff;
   --hero-muted: #b8c5da;
@@ -337,3 +337,136 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
   .product-detail__purchase { align-items: stretch; }
   .product-detail__purchase .btn { flex: 1 1 100%; }
 }
+
+
+.card { animation: none; will-change: translate, opacity; }
+.motion-enabled .card.motion-reveal {
+  opacity: 0;
+  translate: 0 28px;
+  transition: opacity .72s cubic-bezier(.2,.72,.25,1),
+              translate .72s cubic-bezier(.2,.72,.25,1),
+              box-shadow .24s ease, border-color .24s ease, transform .24s ease;
+  transition-delay: calc(var(--i, 0) * 75ms);
+}
+.motion-enabled .card.motion-reveal.is-visible {
+  opacity: 1;
+  translate: 0 0;
+}
+
+
+.hero .eyebrow {
+  animation: voltixHeroIn .72s cubic-bezier(.2,.75,.25,1) .08s both;
+}
+.hero h1 {
+  animation: voltixHeroIn .82s cubic-bezier(.2,.75,.25,1) .17s both;
+}
+.hero p:not(.eyebrow) {
+  animation: voltixHeroIn .78s cubic-bezier(.2,.75,.25,1) .28s both;
+}
+.hero__cat {
+  animation: voltixChipIn .62s cubic-bezier(.2,.8,.25,1) calc(.38s + var(--i, 0) * 75ms) both;
+}
+
+.catalog__head {
+  animation: voltixHeroIn .62s cubic-bezier(.2,.75,.25,1) .12s both;
+}
+.filters .chip {
+  animation: voltixChipIn .48s cubic-bezier(.2,.8,.25,1) calc(var(--i, 0) * 35ms) both;
+}
+.chip, .hero__cat, .theme-btn, .auth-btn, .cart-btn, .menu-btn, .btn, .icon-btn {
+  -webkit-tap-highlight-color: transparent;
+}
+.btn, .auth-btn, .cart-btn, .theme-btn, .menu-btn, .icon-btn, .chip, .hero__cat {
+  transition: transform .22s cubic-bezier(.2,.8,.25,1),
+              box-shadow .22s ease, background-color .22s ease,
+              border-color .22s ease, color .22s ease;
+}
+.btn:hover, .auth-btn:hover, .cart-btn:hover, .theme-btn:hover, .menu-btn:hover, .chip:hover, .hero__cat:hover {
+  transform: translateY(-2px);
+}
+.btn:active, .auth-btn:active, .cart-btn:active, .theme-btn:active, .menu-btn:active, .chip:active, .hero__cat:active {
+  transform: translateY(0) scale(.97);
+}
+.btn.is-added {
+  background: #159457;
+  box-shadow: 0 7px 20px rgba(21,148,87,.22);
+  animation: voltixAdded .36s ease both;
+}
+
+
+.page-view:not([hidden]) { animation: none; }
+.view-enter { animation: voltixPageIn .62s cubic-bezier(.2,.75,.25,1) both !important; }
+#hero.view-enter, #catalog.view-enter { animation: voltixPageIn .62s cubic-bezier(.2,.75,.25,1) both !important; }
+.product-detail { animation: voltixDetailIn .72s cubic-bezier(.2,.75,.25,1) both; }
+.product-detail__media { animation: voltixMediaIn .78s cubic-bezier(.2,.75,.25,1) .08s both; }
+.product-detail__info > * { animation: voltixHeroIn .58s ease both; }
+.product-detail__info > *:nth-child(1) { animation-delay: .08s; }
+.product-detail__info > *:nth-child(2) { animation-delay: .14s; }
+.product-detail__info > *:nth-child(3) { animation-delay: .22s; }
+.product-detail__info > *:nth-child(4) { animation-delay: .30s; }
+.product-detail__info > *:nth-child(5) { animation-delay: .38s; }
+
+/* Элементы корзины, боковое меню и окна. */
+.cart { transition: transform .38s cubic-bezier(.22,.8,.25,1); }
+.account-menu { transition: transform .38s cubic-bezier(.22,.8,.25,1); }
+.overlay, .account-overlay { transition: opacity .32s ease; }
+.cart-item {
+  animation: voltixCartRow .46s cubic-bezier(.2,.75,.25,1) calc(var(--i, 0) * 55ms) both;
+}
+.modal.is-open { animation: voltixFadeIn .28s ease both; }
+.modal__box { animation: voltixModalIn .36s cubic-bezier(.2,.8,.25,1) both; }
+.toast.is-visible { animation: voltixToastIn .34s cubic-bezier(.2,.8,.25,1) both; }
+.theme-changing .theme-btn__icon { display: inline-block; animation: voltixThemeSpin .48s cubic-bezier(.2,.8,.25,1) both; }
+
+@keyframes voltixHeroIn {
+  from { opacity: 0; transform: translate3d(0, 22px, 0); filter: blur(3px); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); }
+}
+@keyframes voltixChipIn {
+  from { opacity: 0; transform: translate3d(0, 17px, 0) scale(.96); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes voltixPageIn {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes voltixDetailIn {
+  from { opacity: 0; transform: translate3d(0, 24px, 0) scale(.985); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes voltixMediaIn {
+  from { opacity: 0; transform: translate3d(-18px, 0, 0) scale(.98); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes voltixCartRow {
+  from { opacity: 0; translate: 18px 0; }
+  to   { opacity: 1; translate: 0 0; }
+}
+@keyframes voltixModalIn {
+  from { opacity: 0; transform: translate3d(0, 18px, 0) scale(.97); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes voltixFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes voltixToastIn {
+  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(.97); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes voltixAdded { 0% { transform: scale(.94); } 65% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@keyframes voltixThemeSpin { from { transform: rotate(-100deg) scale(.6); opacity: .3; } to { transform: rotate(0) scale(1); opacity: 1; } }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-enabled .card.motion-reveal,
+  .motion-enabled .card.motion-reveal.is-visible {
+    opacity: 1 !important;
+    translate: 0 0 !important;
+    transition: none !important;
+  }
+  .hero .eyebrow, .hero h1, .hero p:not(.eyebrow), .hero__cat,
+  .catalog__head, .filters .chip, .view-enter, .product-detail,
+  .product-detail__media, .product-detail__info > *, .cart-item,
+  .modal.is-open, .modal__box, .toast.is-visible, .theme-changing .theme-btn__icon {
+    animation: none !important;
+  }
+}
+
