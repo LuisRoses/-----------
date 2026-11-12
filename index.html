@@ -136,6 +136,53 @@
     <div id="product-detail-content"></div>
   </section>
 
+  <section id="profile-page" class="container page-view" hidden>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow eyebrow--dark">ЛИЧНЫЙ КАБИНЕТ VOLTIX</p>
+        <h1>Мой профиль</h1>
+        <p class="page-subtitle">Информация о вашей учётной записи.</p>
+      </div>
+      <button class="btn btn--light" type="button" data-back-catalog>← В каталог</button>
+    </div>
+    <div id="profile-content" class="profile-layout"></div>
+  </section>
+
+  <section id="my-support-page" class="container page-view" hidden>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow eyebrow--dark">ЦЕНТР ПОДДЕРЖКИ</p>
+        <h1>Мои обращения</h1>
+        <p class="page-subtitle">Здесь находятся ваши диалоги с поддержкой Voltix.</p>
+      </div>
+      <div class="page-heading__actions">
+        <button class="btn btn--light" type="button" data-back-catalog>← В каталог</button>
+        <button class="btn" type="button" data-new-support>＋ Новое обращение</button>
+      </div>
+    </div>
+    <div id="my-support-list" class="support-ticket-list"></div>
+  </section>
+
+  <section id="admin-support-page" class="container page-view" hidden>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow eyebrow--dark">ПАНЕЛЬ АДМИНИСТРАТОРА</p>
+        <h1>Обращения в поддержку</h1>
+        <p class="page-subtitle">Все обращения пользователей Voltix собраны здесь.</p>
+      </div>
+      <button class="btn btn--light" type="button" data-back-catalog>← В каталог</button>
+    </div>
+    <div class="support-admin-layout">
+      <div>
+        <div class="support-list-heading"><strong>Входящие обращения</strong><span id="admin-support-count" class="muted-small"></span></div>
+        <div id="admin-support-list" class="support-ticket-list"></div>
+      </div>
+      <div id="admin-support-detail" class="support-detail-panel">
+        <div class="support-empty"><span>🎧</span><strong>Выберите обращение</strong><p>Откройте заявку слева, чтобы прочитать сообщения и ответить пользователю.</p></div>
+      </div>
+    </div>
+  </section>
+
   <footer class="footer">
     <div class="container footer__inner">
       <div>
@@ -176,13 +223,17 @@
         <div>
           <strong id="menu-nickname">Пользователь</strong>
           <span id="menu-email" class="muted-small"></span>
+          <span id="menu-role" class="role-badge role-badge--user">Пользователь</span>
         </div>
       </div>
       <button id="account-menu-close" class="icon-btn" type="button" aria-label="Закрыть меню">✕</button>
     </div>
     <nav class="account-nav" aria-label="Разделы аккаунта">
+      <button id="menu-profile" type="button"><span>◉</span> Мой профиль</button>
       <button id="menu-my-products" type="button"><span>▣</span> Мои товары</button>
       <button id="menu-add-product" type="button"><span>＋</span> Добавить товар</button>
+      <button id="menu-my-support" type="button"><span>🎧</span> Мои обращения</button>
+      <button id="menu-admin-support" type="button" hidden><span>✉</span> Обращения в поддержку <b id="admin-menu-ticket-count" class="nav-count">0</b></button>
     </nav>
     <div class="account-menu__bottom">
       <button id="logout-btn" class="logout-btn" type="button"><span>↪</span> Выйти из аккаунта</button>
@@ -285,6 +336,37 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <button id="support-fab" class="support-fab" type="button" aria-label="Создать обращение в поддержку" title="Поддержка">
+    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <path d="M5.5 16v-2.2a10.5 10.5 0 0 1 21 0V16" />
+      <rect x="4" y="15" width="5.5" height="9" rx="2.5" />
+      <rect x="22.5" y="15" width="5.5" height="9" rx="2.5" />
+      <path d="M25 24c-.6 2.1-2.1 3.2-4.8 3.2h-2.1" />
+      <path d="M17.7 25.2h2.1a1.3 1.3 0 0 1 0 2.6h-2.1a1.3 1.3 0 0 1 0-2.6Z" />
+    </svg>
+    <span class="support-fab__ping" aria-hidden="true"></span>
+  </button>
+
+  <div id="support-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="support-modal-title">
+    <div class="modal__box support-modal__box">
+      <button id="support-modal-close" class="icon-btn modal__close" type="button" aria-label="Закрыть">✕</button>
+      <div class="support-modal__icon">🎧</div>
+      <h2 id="support-modal-title">Обращение в поддержку</h2>
+      <p class="support-modal__intro">Опишите вопрос — я лично рассмотрю ваше обращение.</p>
+      <form id="support-form" class="form support-form">
+        <label>Заголовок обращения
+          <input name="title" type="text" required minlength="3" maxlength="80" placeholder="Например, Вопрос по заказу">
+        </label>
+        <label>Описание обращения
+          <textarea name="description" required minlength="10" maxlength="3000" rows="5" placeholder="Подробно опишите, чем я могу помочь..."></textarea>
+        </label>
+        <button class="btn btn--wide" type="submit">Отправить обращение</button>
+      </form>
+      <p id="support-form-message" class="form-message" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>

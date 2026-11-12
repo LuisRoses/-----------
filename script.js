@@ -6,8 +6,14 @@ const STORAGE_KEYS = {
   products: "voltix-user-products",
   accounts: "voltix-accounts",
   session: "voltix-session",
-  theme: "voltix-theme"
+  theme: "voltix-theme",
+  tickets: "voltix-support-tickets"
 };
+
+// Администратор Voltix — аккаунт владельца сайта.
+// Это клиентская демо-версия: для реальной защиты права администратора нужно
+// перенести проверку роли на сервер.
+const ADMIN_EMAIL = "andreytiktokmk11@gmail.com";
 
 const categories = {
   "Смартфоны":         { icon: "📱", tint: "#dfe8ff" },
@@ -82,6 +88,9 @@ if (!cart || typeof cart !== "object" || Array.isArray(cart)) cart = {};
 let userProducts = loadUserProducts();
 let products = [...baseProducts, ...userProducts];
 let accounts = loadAccounts();
+let supportTickets = readStorage(STORAGE_KEYS.tickets, []);
+if (!Array.isArray(supportTickets)) supportTickets = [];
+let selectedAdminTicketId = null;
 let currentUser = null;
 const storedSession = readStorage(STORAGE_KEYS.session, null);
 if (storedSession && storedSession.userId) {
@@ -230,6 +239,30 @@ function avatarMarkup(user, className = "avatar", elementId = "") {
   return `<span${idAttribute} class="${className}" aria-hidden="true">${initials(user?.nickname)}</span>`;
 }
 
+function getUserRole(user) {
+  if (!user) return "user";
+  if (String(user.email || "").trim().toLowerCase() === ADMIN_EMAIL) return "admin";
+  if (user.role === "seller" || products.some((product) => product.ownerId === user.id)) return "seller";
+  return "user";
+}
+
+function roleLabel(role) {
+  return role === "admin" ? "Администратор" : role === "seller" ? "Продавец" : "Пользователь";
+}
+
+function applyUserRole(user) {
+  if (!user) return;
+  const role = getUserRole(user);
+  const badge = $("menu-role");
+  if (badge) {
+    badge.textContent = roleLabel(role);
+    badge.className = `role-badge role-badge--${role}`;
+  }
+  const adminLink = $("menu-admin-support");
+  if (adminLink) adminLink.hidden = role !== "admin";
+  updateAdminTicketCount();
+}
+
 function renderAccount() {
   const guest = $("account-guest");
   const userBlock = $("account-user");
@@ -246,6 +279,7 @@ function renderAccount() {
   $("menu-avatar").outerHTML = avatarMarkup(currentUser, "avatar avatar--large", "menu-avatar");
   $("menu-nickname").textContent = currentUser.nickname;
   $("menu-email").textContent = currentUser.email;
+  applyUserRole(currentUser);
 }
 
 function sellerMarkup(product) {
@@ -324,6 +358,7 @@ function openProduct(productId, pushHistory = true) {
   $("my-products-page").hidden = true;
   $("create-product-page").hidden = true;
   $("product-detail-page").hidden = false;
+  ["profile-page", "my-support-page", "admin-support-page"].forEach((id) => { if ($(id)) $(id).hidden = true; });
   $("search").value = "";
   renderProductDetails(product);
   replayViewAnimation($("product-detail-page"));
@@ -644,6 +679,7 @@ async function handleRegister(event) {
       nickname,
       email,
       avatar,
+      role: email === ADMIN_EMAIL ? "admin" : "user",
       passwordHash: credentials.hash,
       passwordSalt: credentials.salt,
       createdAt: new Date().toISOString()
@@ -723,6 +759,7 @@ function showCatalog(updateHistory = true) {
   $("my-products-page").hidden = true;
   $("create-product-page").hidden = true;
   $("product-detail-page").hidden = true;
+  ["profile-page", "my-support-page", "admin-support-page"].forEach((id) => { if ($(id)) $(id).hidden = true; });
   $("search").placeholder = "Найти товар";
   renderProducts();
   replayViewAnimation($("hero"));
@@ -740,6 +777,7 @@ function showMyProducts() {
   $("my-products-page").hidden = false;
   $("create-product-page").hidden = true;
   $("product-detail-page").hidden = true;
+  ["profile-page", "my-support-page", "admin-support-page"].forEach((id) => { if ($(id)) $(id).hidden = true; });
   renderMyProducts();
   replayViewAnimation($("my-products-page"));
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -755,9 +793,250 @@ function showCreateProduct() {
   $("my-products-page").hidden = true;
   $("create-product-page").hidden = false;
   $("product-detail-page").hidden = true;
+  ["profile-page", "my-support-page", "admin-support-page"].forEach((id) => { if ($(id)) $(id).hidden = true; });
   $("create-product-form").reset();
   replayViewAnimation($("create-product-page"));
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function formatSupportDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Дата неизвестна";
+  return date.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function saveSupportTickets() {
+  return writeStorage(STORAGE_KEYS.tickets, supportTickets);
+}
+
+function getTicketStatusLabel(status) {
+  return status === "closed" ? "Закрыто" : status === "answered" ? "Есть ответ" : "Ожидает ответа";
+}
+
+function updateAdminTicketCount() {
+  const count = supportTickets.filter((ticket) => ticket.status !== "closed").length;
+  const badge = $("admin-menu-ticket-count");
+  const label = $("admin-support-count");
+  if (badge) {
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+  }
+  if (label) label.textContent = `${supportTickets.length} всего`;
+}
+
+function showProfilePage() {
+  if (!currentUser) return openAuth("login");
+  closeAccountMenu();
+  currentPage = "profile";
+  document.title = "Мой профиль — Voltix";
+  ["hero", "catalog", "my-products-page", "create-product-page", "product-detail-page", "my-support-page", "admin-support-page"].forEach((id) => { $(id).hidden = true; });
+  $("profile-page").hidden = false;
+  const role = getUserRole(currentUser);
+  const myProducts = products.filter((product) => product.ownerId === currentUser.id).length;
+  const myTickets = supportTickets.filter((ticket) => ticket.userId === currentUser.id).length;
+  $("profile-content").innerHTML = `
+    <article class="profile-card">
+      <div class="profile-card__identity">
+        ${avatarMarkup(currentUser, "avatar avatar--profile")}
+        <div><h2>${escapeHTML(currentUser.nickname)}</h2><span class="role-badge role-badge--${role}">${roleLabel(role)}</span></div>
+      </div>
+      <div class="profile-info-grid">
+        <div><span>Электронная почта</span><strong>${escapeHTML(currentUser.email)}</strong></div>
+        <div><span>Аккаунт создан</span><strong>${formatSupportDate(currentUser.createdAt)}</strong></div>
+      </div>
+      <div class="profile-stats">
+        <div><strong>${myProducts}</strong><span>Мои товары</span></div>
+        <div><strong>${myTickets}</strong><span>Обращения</span></div>
+      </div>
+      <div class="profile-card__actions">
+        <button class="btn" type="button" data-new-support>Обратиться в поддержку</button>
+        <button class="btn btn--light" type="button" data-open-my-support>Мои обращения</button>
+      </div>
+    </article>`;
+  replayViewAnimation($("profile-page"));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function openSupportModal() {
+  if (!currentUser) {
+    showToast("Войдите в аккаунт, чтобы отправить обращение.", "error");
+    return openAuth("login");
+  }
+  closeAccountMenu();
+  $("support-form").reset();
+  $("support-form-message").textContent = "";
+  $("support-form-message").className = "form-message";
+  $("support-modal").classList.add("is-open");
+  document.body.classList.add("no-scroll");
+  window.setTimeout(() => $("support-form").elements.title.focus(), 80);
+}
+
+function closeSupportModal() {
+  $("support-modal").classList.remove("is-open");
+  if (!modalEl.classList.contains("is-open") && !authModal.classList.contains("is-open") && !priceModal.classList.contains("is-open") && !cartEl.classList.contains("is-open") && !accountMenu.classList.contains("is-open")) {
+    document.body.classList.remove("no-scroll");
+  }
+}
+
+function handleSupportCreate(event) {
+  event.preventDefault();
+  if (!currentUser) return closeSupportModal();
+  const data = new FormData(event.currentTarget);
+  const title = String(data.get("title") || "").trim();
+  const description = String(data.get("description") || "").trim();
+  if (title.length < 3 || description.length < 10) {
+    $("support-form-message").textContent = "Заполните заголовок и описание подробнее.";
+    $("support-form-message").className = "form-message form-message--error";
+    return;
+  }
+  const ticket = {
+    id: `VT-${Date.now().toString().slice(-7)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+    userId: currentUser.id,
+    userName: currentUser.nickname,
+    userEmail: currentUser.email,
+    title,
+    description,
+    status: "new",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messages: [{ id: `msg-${Date.now()}`, sender: "user", senderName: currentUser.nickname, text: description, createdAt: new Date().toISOString() }]
+  };
+  supportTickets.unshift(ticket);
+  if (!saveSupportTickets()) {
+    supportTickets = supportTickets.filter((item) => item.id !== ticket.id);
+    return;
+  }
+  closeSupportModal();
+  updateAdminTicketCount();
+  showToast(`Обращение ${ticket.id} отправлено. Ответ появится в разделе «Мои обращения».`);
+  showMySupportPage();
+}
+
+function messageMarkup(message) {
+  const isAdmin = message.sender === "admin";
+  return `<div class="support-message ${isAdmin ? "support-message--admin" : "support-message--user"}">
+    <div class="support-message__meta"><strong>${isAdmin ? "Поддержка Voltix" : escapeHTML(message.senderName || "Пользователь")}</strong><time>${formatSupportDate(message.createdAt)}</time></div>
+    <p>${escapeHTML(message.text).replace(/\n/g, "<br>")}</p>
+  </div>`;
+}
+
+function renderMySupportPage() {
+  const list = $("my-support-list");
+  const mine = supportTickets.filter((ticket) => ticket.userId === currentUser?.id);
+  if (!mine.length) {
+    list.innerHTML = `<div class="support-empty"><span>💬</span><strong>У вас пока нет обращений</strong><p>Нажмите «Новое обращение», чтобы написать напрямую администратору Voltix.</p></div>`;
+    return;
+  }
+  list.innerHTML = mine.map((ticket) => `
+    <article class="support-ticket-card">
+      <div class="support-ticket-card__head"><div><span class="support-ticket-id">${escapeHTML(ticket.id)}</span><h3>${escapeHTML(ticket.title)}</h3></div><span class="ticket-status ticket-status--${escapeHTML(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
+      <p class="support-ticket-date">Создано: ${formatSupportDate(ticket.createdAt)}</p>
+      <div class="support-thread">${(ticket.messages || []).map(messageMarkup).join("")}</div>
+      ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ваш ответ<textarea name="message" required minlength="2" maxlength="2000" rows="2" placeholder="Напишите дополнительное сообщение..."></textarea></label><button class="btn btn--small" type="submit">Отправить</button></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
+    </article>`).join("");
+}
+
+function showMySupportPage() {
+  if (!currentUser) return openAuth("login");
+  closeAccountMenu();
+  currentPage = "my-support";
+  document.title = "Мои обращения — Voltix";
+  ["hero", "catalog", "my-products-page", "create-product-page", "product-detail-page", "profile-page", "admin-support-page"].forEach((id) => { $(id).hidden = true; });
+  $("my-support-page").hidden = false;
+  renderMySupportPage();
+  replayViewAnimation($("my-support-page"));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderAdminTicketList() {
+  const list = $("admin-support-list");
+  const label = $("admin-support-count");
+  const openCount = supportTickets.filter((ticket) => ticket.status !== "closed").length;
+  if (label) label.textContent = `${supportTickets.length} всего · ${openCount} активных`;
+  $("admin-menu-ticket-count").textContent = String(openCount);
+  $("admin-menu-ticket-count").hidden = openCount === 0;
+  if (!supportTickets.length) {
+    list.innerHTML = `<div class="support-empty support-empty--compact"><span>📭</span><strong>Обращений пока нет</strong><p>Новые обращения пользователей появятся здесь.</p></div>`;
+    return;
+  }
+  list.innerHTML = supportTickets.map((ticket) => `
+    <button class="admin-ticket-row ${ticket.id === selectedAdminTicketId ? "is-selected" : ""}" type="button" data-open-ticket="${escapeHTML(ticket.id)}">
+      <span class="admin-ticket-row__top"><strong>${escapeHTML(ticket.title)}</strong><span class="ticket-status ticket-status--${escapeHTML(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></span>
+      <span class="admin-ticket-row__user">${escapeHTML(ticket.userName || "Пользователь")} · ${escapeHTML(ticket.userEmail || "")}</span>
+      <span class="admin-ticket-row__date">${formatSupportDate(ticket.updatedAt || ticket.createdAt)}</span>
+    </button>`).join("");
+}
+
+function renderAdminTicketDetail() {
+  const panel = $("admin-support-detail");
+  const ticket = supportTickets.find((item) => item.id === selectedAdminTicketId);
+  if (!ticket) {
+    panel.innerHTML = `<div class="support-empty"><span>🎧</span><strong>Выберите обращение</strong><p>Откройте заявку слева, чтобы прочитать сообщения и ответить пользователю.</p></div>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="support-detail-head"><div><span class="support-ticket-id">${escapeHTML(ticket.id)}</span><h2>${escapeHTML(ticket.title)}</h2><p>${escapeHTML(ticket.userName || "Пользователь")} · ${escapeHTML(ticket.userEmail || "")}</p></div><span class="ticket-status ticket-status--${escapeHTML(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
+    <div class="support-thread support-thread--admin">${(ticket.messages || []).map(messageMarkup).join("")}</div>
+    <div class="support-detail-actions">
+      ${ticket.status !== "closed" ? `<form id="admin-reply-form" class="support-reply-form"><label>Ваш ответ<textarea name="message" required minlength="2" maxlength="2000" rows="3" placeholder="Ответьте пользователю..."></textarea></label><button class="btn" type="submit">Отправить ответ</button></form>` : `<p class="support-closed-note">Обращение закрыто.</p>`}
+      <button id="admin-ticket-toggle" class="btn ${ticket.status === "closed" ? "btn--light" : "btn--danger"}" type="button">${ticket.status === "closed" ? "Переоткрыть обращение" : "Закрыть обращение"}</button>
+    </div>`;
+  const replyForm = $("admin-reply-form");
+  if (replyForm) replyForm.addEventListener("submit", (event) => handleTicketReply(event, ticket.id, "admin"));
+  $("admin-ticket-toggle").addEventListener("click", () => {
+    ticket.status = ticket.status === "closed" ? "new" : "closed";
+    ticket.updatedAt = new Date().toISOString();
+    saveSupportTickets();
+    renderAdminTicketList();
+    renderAdminTicketDetail();
+    updateAdminTicketCount();
+  });
+}
+
+function showAdminSupportPage() {
+  if (!currentUser || getUserRole(currentUser) !== "admin") {
+    showToast("Доступ к этому разделу есть только у администратора.", "error");
+    return showCatalog();
+  }
+  closeAccountMenu();
+  currentPage = "admin-support";
+  document.title = "Обращения в поддержку — Voltix";
+  ["hero", "catalog", "my-products-page", "create-product-page", "product-detail-page", "profile-page", "my-support-page"].forEach((id) => { $(id).hidden = true; });
+  $("admin-support-page").hidden = false;
+  renderAdminTicketList();
+  renderAdminTicketDetail();
+  replayViewAnimation($("admin-support-page"));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function handleTicketReply(event, ticketId, sender) {
+  event.preventDefault();
+  const ticket = supportTickets.find((item) => item.id === ticketId);
+  if (!ticket || ticket.status === "closed") return;
+  if (sender === "admin" && (!currentUser || getUserRole(currentUser) !== "admin")) return;
+  if (sender === "user" && (!currentUser || ticket.userId !== currentUser.id)) return;
+  const message = String(new FormData(event.currentTarget).get("message") || "").trim();
+  if (message.length < 2) return;
+  ticket.messages = Array.isArray(ticket.messages) ? ticket.messages : [];
+  ticket.messages.push({
+    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    sender,
+    senderName: sender === "admin" ? "Администратор Voltix" : currentUser.nickname,
+    text: message,
+    createdAt: new Date().toISOString()
+  });
+  ticket.status = sender === "admin" ? "answered" : "new";
+  ticket.updatedAt = new Date().toISOString();
+  if (!saveSupportTickets()) return;
+  if (sender === "admin") {
+    renderAdminTicketList();
+    renderAdminTicketDetail();
+    showToast("Ответ отправлен пользователю.");
+  } else {
+    renderMySupportPage();
+    showToast("Сообщение отправлено.");
+  }
+  updateAdminTicketCount();
 }
 
 function handleCreateProduct(event) {
@@ -794,6 +1073,11 @@ function handleCreateProduct(event) {
     createdAt: new Date().toISOString()
   };
   products.push(product);
+  if (currentUser.email.toLowerCase() !== ADMIN_EMAIL) {
+    currentUser.role = "seller";
+    saveAccounts();
+    renderAccount();
+  }
   if (!saveUserProducts()) {
     products = products.filter((item) => item.id !== product.id);
     return;
@@ -920,8 +1204,11 @@ $("auth-open").addEventListener("click", () => openAuth("login"));
 $("account-menu-btn").addEventListener("click", openAccountMenu);
 $("account-menu-close").addEventListener("click", closeAccountMenu);
 accountOverlay.addEventListener("click", closeAccountMenu);
+$("menu-profile").addEventListener("click", showProfilePage);
 $("menu-my-products").addEventListener("click", showMyProducts);
 $("menu-add-product").addEventListener("click", showCreateProduct);
+$("menu-my-support").addEventListener("click", showMySupportPage);
+$("menu-admin-support").addEventListener("click", showAdminSupportPage);
 $("logout-btn").addEventListener("click", logout);
 $("create-product-cta").addEventListener("click", showCreateProduct);
 $("my-products-back").addEventListener("click", showCatalog);
@@ -932,6 +1219,29 @@ $("create-product-form").addEventListener("submit", handleCreateProduct);
 
 $("login-form").addEventListener("submit", handleLogin);
 $("register-form").addEventListener("submit", handleRegister);
+$("support-fab").addEventListener("click", openSupportModal);
+$("support-modal-close").addEventListener("click", closeSupportModal);
+$("support-modal").addEventListener("click", (event) => { if (event.target === $("support-modal")) closeSupportModal(); });
+$("support-form").addEventListener("submit", handleSupportCreate);
+$("admin-support-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-open-ticket]");
+  if (!button || !currentUser || getUserRole(currentUser) !== "admin") return;
+  selectedAdminTicketId = button.dataset.openTicket;
+  renderAdminTicketList();
+  renderAdminTicketDetail();
+});
+$("my-support-list").addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-user-reply]");
+  if (form) handleTicketReply(event, form.dataset.userReply, "user");
+});
+document.addEventListener("click", (event) => {
+  const back = event.target.closest("[data-back-catalog]");
+  if (back) showCatalog();
+  const newSupport = event.target.closest("[data-new-support]");
+  if (newSupport) openSupportModal();
+  const openMySupport = event.target.closest("[data-open-my-support]");
+  if (openMySupport) showMySupportPage();
+});
 $("auth-close").addEventListener("click", closeAuth);
 authModal.addEventListener("click", (event) => { if (event.target === authModal) closeAuth(); });
 
@@ -967,11 +1277,23 @@ document.addEventListener("keydown", (event) => {
     closeCheckout();
     closeAuth();
     closePriceEditor();
+    closeSupportModal();
     closeAccountMenu();
   }
 });
 
 const headerEl = document.querySelector(".header");
+window.addEventListener("storage", (event) => {
+  if (event.key !== STORAGE_KEYS.tickets) return;
+  supportTickets = readStorage(STORAGE_KEYS.tickets, []);
+  if (!Array.isArray(supportTickets)) supportTickets = [];
+  updateAdminTicketCount();
+  if (currentPage === "admin-support" && currentUser && getUserRole(currentUser) === "admin") {
+    renderAdminTicketList();
+    renderAdminTicketDetail();
+  }
+  if (currentPage === "my-support" && currentUser) renderMySupportPage();
+});
 window.addEventListener("scroll", () => {
   headerEl.classList.toggle("is-scrolled", window.scrollY > 8);
 }, { passive: true });
@@ -982,4 +1304,5 @@ renderFilters();
 renderProducts();
 renderCart();
 renderAccount();
+updateAdminTicketCount();
 syncPageFromUrl();
