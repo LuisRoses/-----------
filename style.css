@@ -584,3 +584,15 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
 .support-reply-error { color: #c33c4a; font-size: .8rem; line-height: 1.45; }
 :root[data-theme="dark"] .support-reply-error { color: #ff9ba5; }
 
+
+
+/* Ticket deletion controls */
+.support-ticket-card__actions { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.support-ticket-card__actions .btn:disabled, .support-detail-buttons .btn:disabled { opacity: .6; cursor: wait; }
+.support-detail-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+@media (max-width: 520px) {
+  .support-ticket-card__actions { justify-content: stretch; }
+  .support-ticket-card__actions .btn { width: 100%; }
+  .support-detail-buttons { width: 100%; }
+  .support-detail-buttons .btn { flex: 1 1 auto; }
+}

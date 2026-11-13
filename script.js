@@ -1093,6 +1093,7 @@ function renderMySupportPage() {
       <p class="support-ticket-date">Создано: ${formatSupportDate(ticket.createdAt)}</p>
       <div class="support-thread">${(ticket.messages || []).map(messageMarkup).join("")}</div>
       ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ответить поддержке<textarea name="message" required minlength="2" maxlength="2000" rows="3" placeholder="Напишите сообщение для поддержки Voltix..."></textarea></label><p class="support-reply-hint">Ваш ответ увидит администратор. Вы можете продолжить диалог здесь.</p><button class="btn btn--small" type="submit">Отправить сообщение</button><p class="support-reply-error" role="status" aria-live="polite"></p></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
+      <div class="support-ticket-card__actions"><button class="btn btn--small btn--danger" type="button" data-delete-ticket="${escapeHTML(ticket.id)}">Удалить обращение</button></div>
     </article>`).join("");
 }
 
@@ -1139,7 +1140,10 @@ function renderAdminTicketDetail() {
     <div class="support-thread support-thread--admin">${(ticket.messages || []).map(messageMarkup).join("")}</div>
     <div class="support-detail-actions">
       ${ticket.status !== "closed" ? `<form id="admin-reply-form" class="support-reply-form"><label>Ваш ответ<textarea name="message" required minlength="2" maxlength="2000" rows="3" placeholder="Ответьте пользователю..."></textarea></label><button class="btn" type="submit">Отправить ответ</button></form>` : `<p class="support-closed-note">Обращение закрыто.</p>`}
-      <button id="admin-ticket-toggle" class="btn ${ticket.status === "closed" ? "btn--light" : "btn--danger"}" type="button">${ticket.status === "closed" ? "Переоткрыть обращение" : "Закрыть обращение"}</button>
+      <div class="support-detail-buttons">
+        <button id="admin-ticket-toggle" class="btn ${ticket.status === "closed" ? "btn--light" : "btn--danger"}" type="button">${ticket.status === "closed" ? "Переоткрыть обращение" : "Закрыть обращение"}</button>
+        <button id="admin-ticket-delete" class="btn btn--small btn--danger" type="button">Удалить обращение</button>
+      </div>
     </div>`;
   const replyForm = $("admin-reply-form");
   if (replyForm) replyForm.addEventListener("submit", (event) => { void handleTicketReply(event, ticket.id, "admin"); });
@@ -1150,6 +1154,50 @@ function renderAdminTicketDetail() {
     await loadSupportTickets({ quiet: true });
     showToast(nextStatus === "closed" ? "Обращение закрыто." : "Обращение переоткрыто.");
   });
+  $("admin-ticket-delete").addEventListener("click", (event) => {
+    void handleSupportTicketDelete(ticket.id, event.currentTarget);
+  });
+}
+
+async function handleSupportTicketDelete(ticketId, button = null) {
+  if (!currentUser) {
+    showToast("Войдите в аккаунт, чтобы удалить обращение.", "error");
+    return;
+  }
+
+  const ticket = supportTickets.find((item) => item.id === ticketId);
+  if (!ticket) {
+    showToast("Обращение уже удалено или недоступно. Обновите страницу.", "error");
+    return;
+  }
+
+  const isAdmin = getUserRole(currentUser) === "admin";
+  if (!isAdmin && ticket.userId !== currentUser.id) {
+    showToast("Можно удалить только собственное обращение.", "error");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Удалить обращение ${ticket.displayId} «${ticket.title}»?\n\nВместе с ним будет удалена вся переписка. Это действие нельзя отменить.`
+  );
+  if (!confirmed) return;
+
+  if (button) button.disabled = true;
+  try {
+    const { error } = await supabaseClient.rpc("delete_support_ticket", {
+      p_ticket_id: ticket.id
+    });
+    if (error) throw error;
+
+    if (selectedAdminTicketId === ticket.id) selectedAdminTicketId = null;
+    await loadSupportTickets({ quiet: false });
+    showToast("Обращение и переписка удалены.");
+  } catch (error) {
+    console.error("Не удалось удалить обращение:", error);
+    showToast(error?.message || "Не удалось удалить обращение.", "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 async function showAdminSupportPage() {
@@ -1420,6 +1468,11 @@ $("admin-support-list").addEventListener("click", (event) => {
 $("my-support-list").addEventListener("submit", (event) => {
   const form = event.target.closest("[data-user-reply]");
   if (form) void handleTicketReply(event, form.dataset.userReply, "user");
+});
+$("my-support-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-ticket]");
+  if (!button) return;
+  void handleSupportTicketDelete(button.dataset.deleteTicket, button);
 });
 document.addEventListener("click", (event) => {
   const back = event.target.closest("[data-back-catalog]");
