@@ -472,7 +472,7 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
 
 
 
-
+/* Профиль и система поддержки Voltix */
 .role-badge {
   display: inline-flex; align-items: center; width: fit-content; margin-top: 5px;
   padding: 3px 9px; border-radius: 999px; font-size: .68rem; line-height: 1.4; font-weight: 900;
@@ -575,6 +575,6 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
   .support-detail-panel { padding: 14px; }
 }
 
-
+/* Toast выше плавающей кнопки поддержки, чтобы элементы не перекрывались. */
 .toast { bottom: 98px; }
 @media (max-width: 520px) { .toast { right: 16px; bottom: 84px; max-width: calc(100% - 32px); } }

@@ -1,3 +1,11 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://wghzcnpmcunbihxggfwu.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Ck1A_MbjcalAbxk2o0_S-g_oHogMThP";
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+});
+
 "use strict";
 
 const CURRENCY = "$";
@@ -5,15 +13,8 @@ const STORAGE_KEYS = {
   cart: "voltix-cart",
   products: "voltix-user-products",
   accounts: "voltix-accounts",
-  session: "voltix-session",
-  theme: "voltix-theme",
-  tickets: "voltix-support-tickets"
+  theme: "voltix-theme"
 };
-
-// Администратор Voltix — аккаунт владельца сайта.
-// Это клиентская демо-версия: для реальной защиты права администратора нужно
-// перенести проверку роли на сервер.
-const ADMIN_EMAIL = "andreytiktokmk11@gmail.com";
 
 const categories = {
   "Смартфоны":         { icon: "📱", tint: "#dfe8ff" },
@@ -88,14 +89,13 @@ if (!cart || typeof cart !== "object" || Array.isArray(cart)) cart = {};
 let userProducts = loadUserProducts();
 let products = [...baseProducts, ...userProducts];
 let accounts = loadAccounts();
-let supportTickets = readStorage(STORAGE_KEYS.tickets, []);
-if (!Array.isArray(supportTickets)) supportTickets = [];
+// Support tickets now live in Supabase, not in this browser's localStorage.
+let supportTickets = [];
 let selectedAdminTicketId = null;
 let currentUser = null;
-const storedSession = readStorage(STORAGE_KEYS.session, null);
-if (storedSession && storedSession.userId) {
-  currentUser = accounts.find((account) => account.id === storedSession.userId) || null;
-}
+let supportRealtimeChannel = null;
+let authSyncVersion = 0;
+let pendingAuthSync = null;
 
 let activeCategory = "Все";
 let searchQuery = "";
@@ -241,7 +241,7 @@ function avatarMarkup(user, className = "avatar", elementId = "") {
 
 function getUserRole(user) {
   if (!user) return "user";
-  if (String(user.email || "").trim().toLowerCase() === ADMIN_EMAIL) return "admin";
+  if (user.isAdmin === true) return "admin";
   if (user.role === "seller" || products.some((product) => product.ownerId === user.id)) return "seller";
   return "user";
 }
@@ -633,26 +633,73 @@ function showAuthMessage(message, type = "error") {
 }
 
 
-async function hashPassword(password, saltBase64) {
-  if (!window.crypto?.subtle || !window.crypto?.getRandomValues) {
-    throw new Error("Для регистрации откройте сайт через HTTPS или локальный сервер (например, Live Server).");
+function syncCurrentUser(authUser) {
+  if (!authUser) {
+    const version = ++authSyncVersion;
+    pendingAuthSync = null;
+    currentUser = null;
+    supportTickets = [];
+    selectedAdminTicketId = null;
+    const oldChannel = supportRealtimeChannel;
+    supportRealtimeChannel = null;
+    if (oldChannel) void supabaseClient.removeChannel(oldChannel);
+    renderAccount();
+    updateAdminTicketCount();
+    return Promise.resolve();
   }
-  const encoder = new TextEncoder();
-  const salt = saltBase64
-    ? Uint8Array.from(atob(saltBase64), (char) => char.charCodeAt(0))
-    : window.crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await window.crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await window.crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 150000, hash: "SHA-256" }, keyMaterial, 256);
-  const hashBytes = new Uint8Array(bits);
-  const hash = btoa(Array.from(hashBytes, (byte) => String.fromCharCode(byte)).join(""));
-  const saltValue = btoa(Array.from(salt, (byte) => String.fromCharCode(byte)).join(""));
-  return { hash, salt: saltValue };
+
+  if (currentUser?.id === authUser.id && currentUser.roleLoaded) return Promise.resolve();
+  if (pendingAuthSync?.id === authUser.id) return pendingAuthSync.promise;
+
+  const version = ++authSyncVersion;
+  const task = (async () => {
+    let isAdmin = false;
+    const { data: adminResult, error: adminError } = await supabaseClient.rpc("is_support_admin");
+    if (version !== authSyncVersion) return;
+    if (adminError) {
+      console.warn("Не удалось проверить роль администратора:", adminError.message);
+    } else {
+      isAdmin = adminResult === true;
+    }
+
+    const metadata = authUser.user_metadata || {};
+    currentUser = {
+      id: authUser.id,
+      authUserId: authUser.id,
+      nickname: String(metadata.nickname || metadata.full_name || authUser.email?.split("@")[0] || "Пользователь").slice(0, 24),
+      email: authUser.email || "",
+      avatar: safeImageUrl(metadata.avatar || ""),
+      createdAt: authUser.created_at || new Date().toISOString(),
+      isAdmin,
+      roleLoaded: true
+    };
+
+    renderAccount();
+    await loadSupportTickets({ quiet: true });
+    if (version !== authSyncVersion) return;
+    setupSupportRealtime();
+  })();
+
+  const tracked = task.finally(() => {
+    if (pendingAuthSync?.promise === tracked) pendingAuthSync = null;
+  });
+  pendingAuthSync = { id: authUser.id, promise: tracked };
+  return tracked;
 }
 
-function setCurrentUser(user) {
-  currentUser = user;
-  writeStorage(STORAGE_KEYS.session, { userId: user.id });
-  renderAccount();
+async function initializeSupabaseAuth() {
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    // Defer work out of the auth callback to avoid holding the auth lock.
+    window.setTimeout(() => { void syncCurrentUser(session?.user || null); }, 0);
+  });
+
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error) {
+    console.error("Не удалось восстановить сессию Supabase:", error);
+    showToast("Не удалось восстановить вход. Попробуйте обновить страницу.", "error");
+    return;
+  }
+  await syncCurrentUser(data.session?.user || null);
 }
 
 async function handleRegister(event) {
@@ -667,35 +714,32 @@ async function handleRegister(event) {
 
   if (nickname.length < 2 || nickname.length > 24) return showAuthMessage("Никнейм должен содержать от 2 до 24 символов.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showAuthMessage("Введите корректный адрес электронной почты.");
-  if (accounts.some((account) => account.email.toLowerCase() === email)) return showAuthMessage("Аккаунт с такой почтой уже существует. Попробуйте войти.");
   if (password.length < 8) return showAuthMessage("Пароль должен содержать не менее 8 символов.");
   if (password !== passwordConfirm) return showAuthMessage("Пароли не совпадают.");
   if (data.get("avatar") && !avatar) return showAuthMessage("Ссылка на аватар должна начинаться с http:// или https://.");
 
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
   try {
-    const credentials = await hashPassword(password);
-    const user = {
-      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      nickname,
+    const { data: result, error } = await supabaseClient.auth.signUp({
       email,
-      avatar,
-      role: email === ADMIN_EMAIL ? "admin" : "user",
-      passwordHash: credentials.hash,
-      passwordSalt: credentials.salt,
-      createdAt: new Date().toISOString()
-    };
-    accounts.push(user);
-    if (!saveAccounts()) {
-      accounts = accounts.filter((account) => account.id !== user.id);
-      return;
-    }
-    setCurrentUser(user);
+      password,
+      options: { data: { nickname, avatar } }
+    });
+    if (error) throw error;
     form.reset();
-    closeAuth();
-    renderAccount();
-    showToast(`Добро пожаловать, ${nickname}!`);
+
+    if (result.session && result.user) {
+      await syncCurrentUser(result.user);
+      closeAuth();
+      showToast(`Добро пожаловать, ${nickname}!`);
+    } else {
+      showAuthMessage("Аккаунт создан. Проверьте почту и подтвердите адрес, затем войдите в Voltix.", "success");
+    }
   } catch (error) {
     showAuthMessage(error.message || "Не удалось создать аккаунт.");
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -705,18 +749,20 @@ async function handleLogin(event) {
   const data = new FormData(form);
   const email = String(data.get("email") || "").trim().toLowerCase();
   const password = String(data.get("password") || "");
-  const user = accounts.find((account) => account.email.toLowerCase() === email);
-  if (!user) return showAuthMessage("Аккаунт не найден. Проверьте почту или зарегистрируйтесь.");
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
 
   try {
-    const credentials = await hashPassword(password, user.passwordSalt);
-    if (credentials.hash !== user.passwordHash) return showAuthMessage("Неверный пароль.");
-    setCurrentUser(user);
+    const { data: result, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await syncCurrentUser(result.user);
     form.reset();
     closeAuth();
-    showToast(`С возвращением, ${user.nickname}!`);
+    showToast(`С возвращением, ${currentUser?.nickname || email}!`);
   } catch (error) {
     showAuthMessage(error.message || "Не удалось выполнить вход.");
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -738,11 +784,13 @@ function closeAccountMenu() {
   }
 }
 
-function logout() {
-  currentUser = null;
-  try { localStorage.removeItem(STORAGE_KEYS.session); } catch (error) { console.warn(error); }
+async function logout() {
+  const { error } = await supabaseClient.auth.signOut();
+  if (error) {
+    showToast(error.message || "Не удалось выйти из аккаунта.", "error");
+    return;
+  }
   closeAccountMenu();
-  renderAccount();
   showCatalog();
   showToast("Вы вышли из аккаунта.");
 }
@@ -805,32 +853,125 @@ function formatSupportDate(value) {
   return date.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function saveSupportTickets() {
-  return writeStorage(STORAGE_KEYS.tickets, supportTickets);
+function displayTicketId(ticket) {
+  return `VT-${String(ticket.id || "").replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
 
 function getTicketStatusLabel(status) {
-  return status === "closed" ? "Закрыто" : status === "answered" ? "Есть ответ" : "Ожидает ответа";
+  return ({ open: "Новое", in_progress: "В работе", waiting: "Ожидает ответа", closed: "Закрыто" })[status] || "Новое";
+}
+
+function getTicketStatusClass(status) {
+  if (status === "closed") return "closed";
+  if (status === "waiting") return "answered";
+  return "new";
 }
 
 function updateAdminTicketCount() {
   const count = supportTickets.filter((ticket) => ticket.status !== "closed").length;
   const badge = $("admin-menu-ticket-count");
   const label = $("admin-support-count");
-  if (badge) {
-    badge.textContent = String(count);
-    badge.hidden = count === 0;
-  }
-  if (label) label.textContent = `${supportTickets.length} всего`;
+  if (badge) { badge.textContent = String(count); badge.hidden = count === 0; }
+  if (label) label.textContent = `${supportTickets.length} всего · ${count} активных`;
 }
 
-function showProfilePage() {
-  if (!currentUser) return openAuth("login");
-  closeAccountMenu();
-  currentPage = "profile";
-  document.title = "Мой профиль — Voltix";
-  ["hero", "catalog", "my-products-page", "create-product-page", "product-detail-page", "my-support-page", "admin-support-page"].forEach((id) => { $(id).hidden = true; });
-  $("profile-page").hidden = false;
+async function loadSupportTickets({ quiet = false } = {}) {
+  if (!currentUser) { supportTickets = []; updateAdminTicketCount(); return; }
+
+  const { data: rows, error } = await supabaseClient
+    .from("support_tickets")
+    .select("id,user_id,user_name,user_email,subject,description,status,created_at,updated_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Ошибка загрузки обращений:", error);
+    if (!quiet) showToast(`Не удалось загрузить обращения: ${error.message}`, "error");
+    return;
+  }
+
+  const ticketIds = (rows || []).map((row) => row.id);
+  let messageRows = [];
+  if (ticketIds.length) {
+    const { data, error: messageError } = await supabaseClient
+      .from("support_messages")
+      .select("id,ticket_id,sender_id,sender_role,sender_name,body,created_at")
+      .in("ticket_id", ticketIds)
+      .order("created_at", { ascending: true });
+    if (messageError) {
+      console.error("Ошибка загрузки сообщений:", messageError);
+      if (!quiet) showToast(`Не удалось загрузить сообщения: ${messageError.message}`, "error");
+      return;
+    }
+    messageRows = data || [];
+  }
+
+  const byTicket = new Map();
+  for (const row of messageRows) {
+    if (!byTicket.has(row.ticket_id)) byTicket.set(row.ticket_id, []);
+    byTicket.get(row.ticket_id).push({
+      id: row.id,
+      sender: row.sender_role || (row.sender_id === currentUser.id ? "user" : "admin"),
+      senderName: row.sender_name || (row.sender_role === "admin" ? "Поддержка Voltix" : "Пользователь"),
+      text: row.body,
+      createdAt: row.created_at
+    });
+  }
+
+  supportTickets = (rows || []).map((row) => {
+    const messages = byTicket.get(row.id) || [];
+    // Show the original description even if the initial message insert was interrupted.
+    if (!messages.length && row.description) {
+      messages.push({
+        id: `initial-${row.id}`,
+        sender: "user",
+        senderName: row.user_name || "Пользователь",
+        text: row.description,
+        createdAt: row.created_at
+      });
+    }
+    return {
+      id: row.id,
+      displayId: `VT-${row.id.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+      userId: row.user_id,
+      userName: row.user_name || "Пользователь Voltix",
+      userEmail: row.user_email || "",
+      title: row.subject,
+      description: row.description,
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at || row.created_at,
+      messages
+    };
+  });
+
+  if (!supportTickets.some((ticket) => ticket.id === selectedAdminTicketId)) selectedAdminTicketId = null;
+  updateAdminTicketCount();
+  if (currentPage === "my-support") renderMySupportPage();
+  if (currentPage === "admin-support") { renderAdminTicketList(); renderAdminTicketDetail(); }
+  if (currentPage === "profile") renderProfileContent();
+}
+
+function setupSupportRealtime() {
+  if (!currentUser) return;
+  if (supportRealtimeChannel) void supabaseClient.removeChannel(supportRealtimeChannel);
+
+  supportRealtimeChannel = supabaseClient
+    .channel(`voltix-support-${currentUser.id}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, () => {
+      void loadSupportTickets({ quiet: true });
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "support_messages" }, () => {
+      void loadSupportTickets({ quiet: true });
+    })
+    .subscribe((status, error) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.warn("Supabase Realtime:", status, error || "");
+      }
+    });
+}
+
+function renderProfileContent() {
+  if (!currentUser) return;
   const role = getUserRole(currentUser);
   const myProducts = products.filter((product) => product.ownerId === currentUser.id).length;
   const myTickets = supportTickets.filter((ticket) => ticket.userId === currentUser.id).length;
@@ -853,6 +994,17 @@ function showProfilePage() {
         <button class="btn btn--light" type="button" data-open-my-support>Мои обращения</button>
       </div>
     </article>`;
+}
+
+async function showProfilePage() {
+  if (!currentUser) return openAuth("login");
+  closeAccountMenu();
+  currentPage = "profile";
+  document.title = "Мой профиль — Voltix";
+  ["hero", "catalog", "my-products-page", "create-product-page", "product-detail-page", "my-support-page", "admin-support-page"].forEach((id) => { $(id).hidden = true; });
+  $("profile-page").hidden = false;
+  await loadSupportTickets({ quiet: true });
+  renderProfileContent();
   replayViewAnimation($("profile-page"));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -878,7 +1030,7 @@ function closeSupportModal() {
   }
 }
 
-function handleSupportCreate(event) {
+async function handleSupportCreate(event) {
   event.preventDefault();
   if (!currentUser) return closeSupportModal();
   const data = new FormData(event.currentTarget);
@@ -889,33 +1041,50 @@ function handleSupportCreate(event) {
     $("support-form-message").className = "form-message form-message--error";
     return;
   }
-  const ticket = {
-    id: `VT-${Date.now().toString().slice(-7)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
-    userId: currentUser.id,
-    userName: currentUser.nickname,
-    userEmail: currentUser.email,
-    title,
-    description,
-    status: "new",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messages: [{ id: `msg-${Date.now()}`, sender: "user", senderName: currentUser.nickname, text: description, createdAt: new Date().toISOString() }]
-  };
-  supportTickets.unshift(ticket);
-  if (!saveSupportTickets()) {
-    supportTickets = supportTickets.filter((item) => item.id !== ticket.id);
-    return;
+
+  const submit = event.currentTarget.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  try {
+    const { data: ticket, error } = await supabaseClient
+      .from("support_tickets")
+      .insert({
+        user_id: currentUser.id,
+        user_name: currentUser.nickname,
+        user_email: currentUser.email,
+        subject: title,
+        description,
+        status: "open"
+      })
+      .select("id,user_id")
+      .single();
+    if (error) throw error;
+
+    const { error: messageError } = await supabaseClient.from("support_messages").insert({
+      ticket_id: ticket.id,
+      sender_id: currentUser.id,
+      sender_role: currentUser.isAdmin ? "admin" : "user",
+      sender_name: currentUser.isAdmin ? "Поддержка Voltix" : currentUser.nickname,
+      body: description
+    });
+    if (messageError) throw messageError;
+
+    closeSupportModal();
+    await loadSupportTickets({ quiet: true });
+    showToast(`Обращение ${displayTicketId(ticket)} отправлено.`);
+    showMySupportPage();
+  } catch (error) {
+    console.error("Не удалось создать обращение:", error);
+    $("support-form-message").textContent = error.message || "Не удалось отправить обращение. Попробуйте ещё раз.";
+    $("support-form-message").className = "form-message form-message--error";
+  } finally {
+    if (submit) submit.disabled = false;
   }
-  closeSupportModal();
-  updateAdminTicketCount();
-  showToast(`Обращение ${ticket.id} отправлено. Ответ появится в разделе «Мои обращения».`);
-  showMySupportPage();
 }
 
 function messageMarkup(message) {
   const isAdmin = message.sender === "admin";
   return `<div class="support-message ${isAdmin ? "support-message--admin" : "support-message--user"}">
-    <div class="support-message__meta"><strong>${isAdmin ? "Поддержка Voltix" : escapeHTML(message.senderName || "Пользователь")}</strong><time>${formatSupportDate(message.createdAt)}</time></div>
+    <div class="support-message__meta"><strong>${escapeHTML(message.senderName || (isAdmin ? "Поддержка Voltix" : "Пользователь"))}</strong><time>${formatSupportDate(message.createdAt)}</time></div>
     <p>${escapeHTML(message.text).replace(/\n/g, "<br>")}</p>
   </div>`;
 }
@@ -929,20 +1098,21 @@ function renderMySupportPage() {
   }
   list.innerHTML = mine.map((ticket) => `
     <article class="support-ticket-card">
-      <div class="support-ticket-card__head"><div><span class="support-ticket-id">${escapeHTML(ticket.id)}</span><h3>${escapeHTML(ticket.title)}</h3></div><span class="ticket-status ticket-status--${escapeHTML(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
+      <div class="support-ticket-card__head"><div><span class="support-ticket-id">${escapeHTML(ticket.displayId)}</span><h3>${escapeHTML(ticket.title)}</h3></div><span class="ticket-status ticket-status--${getTicketStatusClass(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
       <p class="support-ticket-date">Создано: ${formatSupportDate(ticket.createdAt)}</p>
       <div class="support-thread">${(ticket.messages || []).map(messageMarkup).join("")}</div>
       ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ваш ответ<textarea name="message" required minlength="2" maxlength="2000" rows="2" placeholder="Напишите дополнительное сообщение..."></textarea></label><button class="btn btn--small" type="submit">Отправить</button></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
     </article>`).join("");
 }
 
-function showMySupportPage() {
+async function showMySupportPage() {
   if (!currentUser) return openAuth("login");
   closeAccountMenu();
   currentPage = "my-support";
   document.title = "Мои обращения — Voltix";
   ["hero", "catalog", "my-products-page", "create-product-page", "product-detail-page", "profile-page", "admin-support-page"].forEach((id) => { $(id).hidden = true; });
   $("my-support-page").hidden = false;
+  await loadSupportTickets({ quiet: true });
   renderMySupportPage();
   replayViewAnimation($("my-support-page"));
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -950,9 +1120,8 @@ function showMySupportPage() {
 
 function renderAdminTicketList() {
   const list = $("admin-support-list");
-  const label = $("admin-support-count");
   const openCount = supportTickets.filter((ticket) => ticket.status !== "closed").length;
-  if (label) label.textContent = `${supportTickets.length} всего · ${openCount} активных`;
+  $("admin-support-count").textContent = `${supportTickets.length} всего · ${openCount} активных`;
   $("admin-menu-ticket-count").textContent = String(openCount);
   $("admin-menu-ticket-count").hidden = openCount === 0;
   if (!supportTickets.length) {
@@ -961,7 +1130,7 @@ function renderAdminTicketList() {
   }
   list.innerHTML = supportTickets.map((ticket) => `
     <button class="admin-ticket-row ${ticket.id === selectedAdminTicketId ? "is-selected" : ""}" type="button" data-open-ticket="${escapeHTML(ticket.id)}">
-      <span class="admin-ticket-row__top"><strong>${escapeHTML(ticket.title)}</strong><span class="ticket-status ticket-status--${escapeHTML(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></span>
+      <span class="admin-ticket-row__top"><strong>${escapeHTML(ticket.title)}</strong><span class="ticket-status ticket-status--${getTicketStatusClass(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></span>
       <span class="admin-ticket-row__user">${escapeHTML(ticket.userName || "Пользователь")} · ${escapeHTML(ticket.userEmail || "")}</span>
       <span class="admin-ticket-row__date">${formatSupportDate(ticket.updatedAt || ticket.createdAt)}</span>
     </button>`).join("");
@@ -975,25 +1144,24 @@ function renderAdminTicketDetail() {
     return;
   }
   panel.innerHTML = `
-    <div class="support-detail-head"><div><span class="support-ticket-id">${escapeHTML(ticket.id)}</span><h2>${escapeHTML(ticket.title)}</h2><p>${escapeHTML(ticket.userName || "Пользователь")} · ${escapeHTML(ticket.userEmail || "")}</p></div><span class="ticket-status ticket-status--${escapeHTML(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
+    <div class="support-detail-head"><div><span class="support-ticket-id">${escapeHTML(ticket.displayId)}</span><h2>${escapeHTML(ticket.title)}</h2><p>${escapeHTML(ticket.userName || "Пользователь")} · ${escapeHTML(ticket.userEmail || "")}</p></div><span class="ticket-status ticket-status--${getTicketStatusClass(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
     <div class="support-thread support-thread--admin">${(ticket.messages || []).map(messageMarkup).join("")}</div>
     <div class="support-detail-actions">
       ${ticket.status !== "closed" ? `<form id="admin-reply-form" class="support-reply-form"><label>Ваш ответ<textarea name="message" required minlength="2" maxlength="2000" rows="3" placeholder="Ответьте пользователю..."></textarea></label><button class="btn" type="submit">Отправить ответ</button></form>` : `<p class="support-closed-note">Обращение закрыто.</p>`}
       <button id="admin-ticket-toggle" class="btn ${ticket.status === "closed" ? "btn--light" : "btn--danger"}" type="button">${ticket.status === "closed" ? "Переоткрыть обращение" : "Закрыть обращение"}</button>
     </div>`;
   const replyForm = $("admin-reply-form");
-  if (replyForm) replyForm.addEventListener("submit", (event) => handleTicketReply(event, ticket.id, "admin"));
-  $("admin-ticket-toggle").addEventListener("click", () => {
-    ticket.status = ticket.status === "closed" ? "new" : "closed";
-    ticket.updatedAt = new Date().toISOString();
-    saveSupportTickets();
-    renderAdminTicketList();
-    renderAdminTicketDetail();
-    updateAdminTicketCount();
+  if (replyForm) replyForm.addEventListener("submit", (event) => { void handleTicketReply(event, ticket.id, "admin"); });
+  $("admin-ticket-toggle").addEventListener("click", async () => {
+    const nextStatus = ticket.status === "closed" ? "open" : "closed";
+    const { error } = await supabaseClient.from("support_tickets").update({ status: nextStatus }).eq("id", ticket.id);
+    if (error) { showToast(error.message || "Не удалось изменить статус.", "error"); return; }
+    await loadSupportTickets({ quiet: true });
+    showToast(nextStatus === "closed" ? "Обращение закрыто." : "Обращение переоткрыто.");
   });
 }
 
-function showAdminSupportPage() {
+async function showAdminSupportPage() {
   if (!currentUser || getUserRole(currentUser) !== "admin") {
     showToast("Доступ к этому разделу есть только у администратора.", "error");
     return showCatalog();
@@ -1003,40 +1171,47 @@ function showAdminSupportPage() {
   document.title = "Обращения в поддержку — Voltix";
   ["hero", "catalog", "my-products-page", "create-product-page", "product-detail-page", "profile-page", "my-support-page"].forEach((id) => { $(id).hidden = true; });
   $("admin-support-page").hidden = false;
+  await loadSupportTickets({ quiet: true });
   renderAdminTicketList();
   renderAdminTicketDetail();
   replayViewAnimation($("admin-support-page"));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function handleTicketReply(event, ticketId, sender) {
+async function handleTicketReply(event, ticketId, sender) {
   event.preventDefault();
   const ticket = supportTickets.find((item) => item.id === ticketId);
-  if (!ticket || ticket.status === "closed") return;
-  if (sender === "admin" && (!currentUser || getUserRole(currentUser) !== "admin")) return;
-  if (sender === "user" && (!currentUser || ticket.userId !== currentUser.id)) return;
+  if (!ticket || ticket.status === "closed" || !currentUser) return;
+  const isAdmin = getUserRole(currentUser) === "admin";
+  if (sender === "admin" && !isAdmin) return;
+  if (sender === "user" && (isAdmin || ticket.userId !== currentUser.id)) return;
   const message = String(new FormData(event.currentTarget).get("message") || "").trim();
   if (message.length < 2) return;
-  ticket.messages = Array.isArray(ticket.messages) ? ticket.messages : [];
-  ticket.messages.push({
-    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    sender,
-    senderName: sender === "admin" ? "Администратор Voltix" : currentUser.nickname,
-    text: message,
-    createdAt: new Date().toISOString()
-  });
-  ticket.status = sender === "admin" ? "answered" : "new";
-  ticket.updatedAt = new Date().toISOString();
-  if (!saveSupportTickets()) return;
-  if (sender === "admin") {
-    renderAdminTicketList();
-    renderAdminTicketDetail();
-    showToast("Ответ отправлен пользователю.");
-  } else {
-    renderMySupportPage();
-    showToast("Сообщение отправлено.");
+
+  const submit = event.currentTarget.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  try {
+    const { error } = await supabaseClient.from("support_messages").insert({
+      ticket_id: ticket.id,
+      sender_id: currentUser.id,
+      sender_role: isAdmin ? "admin" : "user",
+      sender_name: isAdmin ? "Поддержка Voltix" : currentUser.nickname,
+      body: message
+    });
+    if (error) throw error;
+
+    if (isAdmin) {
+      const { error: statusError } = await supabaseClient.from("support_tickets").update({ status: "waiting" }).eq("id", ticket.id);
+      if (statusError) console.warn("Ответ отправлен, но статус не обновился:", statusError);
+    }
+    await loadSupportTickets({ quiet: true });
+    showToast(isAdmin ? "Ответ отправлен пользователю." : "Сообщение отправлено.");
+  } catch (error) {
+    console.error("Не удалось отправить сообщение:", error);
+    showToast(error.message || "Не удалось отправить сообщение.", "error");
+  } finally {
+    if (submit) submit.disabled = false;
   }
-  updateAdminTicketCount();
 }
 
 function handleCreateProduct(event) {
@@ -1073,11 +1248,8 @@ function handleCreateProduct(event) {
     createdAt: new Date().toISOString()
   };
   products.push(product);
-  if (currentUser.email.toLowerCase() !== ADMIN_EMAIL) {
-    currentUser.role = "seller";
-    saveAccounts();
-    renderAccount();
-  }
+  // Seller status is derived from products owned by this Supabase user.
+  renderAccount();
   if (!saveUserProducts()) {
     products = products.filter((item) => item.id !== product.id);
     return;
@@ -1283,26 +1455,20 @@ document.addEventListener("keydown", (event) => {
 });
 
 const headerEl = document.querySelector(".header");
-window.addEventListener("storage", (event) => {
-  if (event.key !== STORAGE_KEYS.tickets) return;
-  supportTickets = readStorage(STORAGE_KEYS.tickets, []);
-  if (!Array.isArray(supportTickets)) supportTickets = [];
-  updateAdminTicketCount();
-  if (currentPage === "admin-support" && currentUser && getUserRole(currentUser) === "admin") {
-    renderAdminTicketList();
-    renderAdminTicketDetail();
-  }
-  if (currentPage === "my-support" && currentUser) renderMySupportPage();
-});
 window.addEventListener("scroll", () => {
   headerEl.classList.toggle("is-scrolled", window.scrollY > 8);
 }, { passive: true });
 
 
-initTheme();
-renderFilters();
-renderProducts();
-renderCart();
-renderAccount();
-updateAdminTicketCount();
-syncPageFromUrl();
+async function startVoltix() {
+  initTheme();
+  renderFilters();
+  renderProducts();
+  renderCart();
+  renderAccount();
+  updateAdminTicketCount();
+  syncPageFromUrl();
+  await initializeSupabaseAuth();
+}
+
+void startVoltix();
