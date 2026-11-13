@@ -724,7 +724,12 @@ async function handleRegister(event) {
     const { data: result, error } = await supabaseClient.auth.signUp({
       email,
       password,
-      options: { data: { nickname, avatar } }
+      options: {
+        data: { nickname, avatar },
+        // Keep the GitHub Pages repository path when Supabase confirms email.
+        // Example: https://luisroses.github.io/voltix-electronic-shop/
+        emailRedirectTo: new URL("./", window.location.href).href
+      }
     });
     if (error) throw error;
     form.reset();
