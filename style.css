@@ -578,3 +578,36 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
 /* Toast выше плавающей кнопки поддержки, чтобы элементы не перекрывались. */
 .toast { bottom: 98px; }
 @media (max-width: 520px) { .toast { right: 16px; bottom: 84px; max-width: calc(100% - 32px); } }
+
+
+/* Переключение между недавно использованными аккаунтами */
+.switch-account-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 13px 12px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--ink); text-align: left; font-weight: 800;
+}
+.switch-account-btn:hover { background: var(--bg); }
+.switch-account-btn span { width: 22px; color: var(--accent); text-align: center; font-size: 1.2rem; }
+.account-switch-modal__box { width: min(470px,100%); }
+.account-switch-list { display: grid; gap: 7px; max-height: 190px; overflow-y: auto; margin-block: 16px 5px; }
+.account-switch-list:empty { display: none; }
+.account-switch-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--surface-soft); color: var(--ink); text-align: left;
+  transition: border-color .18s, background .18s, transform .18s;
+}
+.account-switch-item:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.account-switch-item__avatar {
+  display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px;
+  border-radius: 50%; background: linear-gradient(135deg,#2250f5,#7d93ff); color: white; font-weight: 900;
+}
+.account-switch-item__text { display: grid; min-width: 0; gap: 1px; }
+.account-switch-item__text strong, .account-switch-item__text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-switch-item__text small { color: var(--muted); font-size: .76rem; }
+.account-switch-form { gap: 12px; }
+:root[data-theme="dark"] .switch-account-btn:hover { background: var(--surface-soft); }
+:root[data-theme="dark"] .account-switch-item { background: var(--surface-soft); }
+.support-reply-hint { color: var(--muted); font-size: .76rem; line-height: 1.45; }
+.support-reply-error { color: #c33c4a; font-size: .8rem; line-height: 1.45; }
+:root[data-theme="dark"] .support-reply-error { color: #ff9ba5; }
