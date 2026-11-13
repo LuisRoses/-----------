@@ -814,32 +814,66 @@ function closeAccountMenu() {
 
 function renderRecentAccountChoices() {
   const list = $("account-switch-list");
+  const count = $("account-switch-count");
   if (!list) return;
+
   const recent = loadRecentAccounts();
+  if (count) count.textContent = String(recent.length);
+
   if (!recent.length) {
-    list.innerHTML = `<p class="form-note">Сохранённых аккаунтов пока нет. Введите почту и пароль ниже.</p>`;
+    list.innerHTML = `
+      <div class="account-switch-empty">
+        <span class="account-switch-empty__icon" aria-hidden="true">👤</span>
+        <strong>Пока нет сохранённых аккаунтов</strong>
+        <span>Нажмите «Добавить аккаунт», чтобы войти в другой аккаунт Voltix.</span>
+      </div>`;
     return;
   }
-  list.innerHTML = recent.map((account) => `
-    <button class="account-switch-item" type="button" data-switch-account-email="${escapeHTML(account.email)}">
-      <span class="account-switch-item__avatar" aria-hidden="true">${escapeHTML(initials(account.nickname))}</span>
-      <span class="account-switch-item__text"><strong>${escapeHTML(account.nickname)}</strong><small>${escapeHTML(account.email)}</small></span>
-    </button>`).join("");
+
+  list.innerHTML = recent.map((account) => {
+    const isCurrent = account.email === String(currentUser?.email || "").toLowerCase();
+    return `
+      <button class="account-switch-item${isCurrent ? " is-current" : ""}" type="button"
+        data-switch-account-email="${escapeHTML(account.email)}" aria-label="Выбрать ${escapeHTML(account.email)}">
+        <span class="account-switch-item__avatar" aria-hidden="true">${escapeHTML(initials(account.nickname))}</span>
+        <span class="account-switch-item__text">
+          <strong>${escapeHTML(account.nickname)}</strong>
+          <small>${escapeHTML(account.email)}</small>
+        </span>
+        ${isCurrent ? `<span class="account-switch-current">Текущий</span>` : `<span class="account-switch-item__arrow" aria-hidden="true">›</span>`}
+      </button>`;
+  }).join("");
+}
+
+function showAccountSwitchForm(email = "") {
+  const form = $("account-switch-form");
+  if (!form) return;
+  form.reset();
+  form.hidden = false;
+  form.elements.email.value = email;
+  $("account-switch-form-title").textContent = email ? "Подтвердите вход в аккаунт" : "Добавить другой аккаунт";
+  $("account-switch-message").textContent = email ? "Введите пароль выбранного аккаунта." : "Введите email и пароль уже зарегистрированного аккаунта.";
+  $("account-switch-message").className = "form-message";
+  window.setTimeout(() => (email ? form.elements.password : form.elements.email).focus(), 50);
 }
 
 function openAccountSwitcher() {
-  closeAccountMenu();
-  const form = $("account-switch-form");
-  form.reset();
-  const recent = loadRecentAccounts();
-  const suggested = recent.find((account) => account.email !== currentUser?.email)?.email || "";
-  form.elements.email.value = suggested;
-  $("account-switch-message").textContent = "";
-  $("account-switch-message").className = "form-message";
-  renderRecentAccountChoices();
-  $("account-switch-modal").classList.add("is-open");
-  document.body.classList.add("no-scroll");
-  window.setTimeout(() => (suggested ? form.elements.password : form.elements.email).focus(), 80);
+  try {
+    closeAccountMenu();
+    const form = $("account-switch-form");
+    if (!form) throw new Error("Не найдена форма переключения аккаунта. Обновите файлы сайта в GitHub Pages.");
+    form.reset();
+    form.hidden = true;
+    $("account-switch-message").textContent = "";
+    $("account-switch-message").className = "form-message";
+    renderRecentAccountChoices();
+    $("account-switch-modal").classList.add("is-open");
+    document.body.classList.add("no-scroll");
+    window.setTimeout(() => $("account-switch-add-btn")?.focus(), 60);
+  } catch (error) {
+    console.error("Не удалось открыть переключатель аккаунтов:", error);
+    showToast(error.message || "Не удалось открыть переключение аккаунта.", "error");
+  }
 }
 
 function closeAccountSwitcher() {
@@ -1494,20 +1528,46 @@ $("menu-my-products").addEventListener("click", showMyProducts);
 $("menu-add-product").addEventListener("click", showCreateProduct);
 $("menu-my-support").addEventListener("click", showMySupportPage);
 $("menu-admin-support").addEventListener("click", showAdminSupportPage);
-$("switch-account-btn").addEventListener("click", openAccountSwitcher);
+// Delegated click handler is resilient to menu re-rendering and dynamically changed content.
+document.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) return;
+
+  if (target.closest("#switch-account-btn")) {
+    event.preventDefault();
+    openAccountSwitcher();
+    return;
+  }
+
+  if (target.closest("#account-switch-add-btn")) {
+    event.preventDefault();
+    showAccountSwitchForm("");
+    return;
+  }
+
+  if (target.closest("#account-switch-cancel")) {
+    event.preventDefault();
+    $("account-switch-form").hidden = true;
+    $("account-switch-form").reset();
+    $("account-switch-message").textContent = "";
+    $("account-switch-add-btn")?.focus();
+    return;
+  }
+
+  const savedAccount = target.closest("[data-switch-account-email]");
+  if (savedAccount) {
+    const email = savedAccount.dataset.switchAccountEmail || "";
+    if (email.toLowerCase() === String(currentUser?.email || "").toLowerCase()) {
+      showToast("Этот аккаунт уже активен.");
+      return;
+    }
+    showAccountSwitchForm(email);
+  }
+});
+
 $("account-switch-close").addEventListener("click", closeAccountSwitcher);
 $("account-switch-modal").addEventListener("click", (event) => { if (event.target === $("account-switch-modal")) closeAccountSwitcher(); });
 $("account-switch-form").addEventListener("submit", handleAccountSwitch);
-$("account-switch-list").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-switch-account-email]");
-  if (!button) return;
-  const form = $("account-switch-form");
-  form.elements.email.value = button.dataset.switchAccountEmail || "";
-  form.elements.password.value = "";
-  form.elements.password.focus();
-  $("account-switch-message").textContent = "Введите пароль выбранного аккаунта.";
-  $("account-switch-message").className = "form-message";
-});
 $("logout-btn").addEventListener("click", logout);
 $("create-product-cta").addEventListener("click", showCreateProduct);
 $("my-products-back").addEventListener("click", showCatalog);

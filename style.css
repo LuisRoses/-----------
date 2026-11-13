@@ -611,3 +611,77 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
 .support-reply-hint { color: var(--muted); font-size: .76rem; line-height: 1.45; }
 .support-reply-error { color: #c33c4a; font-size: .8rem; line-height: 1.45; }
 :root[data-theme="dark"] .support-reply-error { color: #ff9ba5; }
+
+/* Account switcher v2: explicit styles prevent stale/default browser button appearance. */
+.account-menu__bottom { display: grid; gap: 7px; }
+#switch-account-btn.switch-account-btn {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  width: 100% !important;
+  min-height: 46px !important;
+  padding: 12px 14px !important;
+  border: 1px solid transparent !important;
+  border-radius: 11px !important;
+  background: transparent !important;
+  color: var(--ink) !important;
+  font: 800 .92rem/1.35 var(--font) !important;
+  text-align: left !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent;
+}
+#switch-account-btn.switch-account-btn:hover {
+  background: var(--surface-soft) !important;
+  border-color: var(--line) !important;
+  transform: translateY(-1px);
+}
+#switch-account-btn.switch-account-btn:active { transform: scale(.985); }
+#switch-account-btn.switch-account-btn:focus-visible {
+  outline: 3px solid var(--accent) !important;
+  outline-offset: 2px !important;
+}
+#switch-account-btn.switch-account-btn > span {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  color: var(--accent) !important;
+  font-size: 1.25rem !important;
+}
+.account-switch-modal__box { width: min(480px,100%); }
+.account-switch-section { margin-top: 18px; }
+.account-switch-section__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; font-size: .86rem; }
+.account-switch-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding-inline: 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: .75rem; font-weight: 800; }
+.account-switch-list { display: grid; gap: 8px; max-height: 220px; overflow-y: auto; margin: 0; }
+.account-switch-list:empty { display: block; }
+.account-switch-item {
+  display: flex; align-items: center; gap: 11px; width: 100%; min-width: 0;
+  padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface-soft); color: var(--ink); text-align: left;
+  cursor: pointer; transition: border-color .18s, background .18s, transform .18s;
+}
+.account-switch-item:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.account-switch-item.is-current { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); }
+.account-switch-item__avatar { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg,#2250f5,#7d93ff); color: white; font-weight: 900; }
+.account-switch-item__text { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.account-switch-item__text strong, .account-switch-item__text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-switch-item__text strong { font-size: .88rem; }
+.account-switch-item__text small { color: var(--muted); font-size: .75rem; }
+.account-switch-current { flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: .67rem; font-weight: 800; }
+.account-switch-item__arrow { color: var(--muted); font-size: 1.5rem; line-height: 1; }
+.account-switch-empty { display: grid; justify-items: center; gap: 6px; padding: 22px 16px; border: 1px dashed var(--line); border-radius: 12px; background: var(--surface-soft); text-align: center; }
+.account-switch-empty__icon { font-size: 1.8rem; }
+.account-switch-empty strong { font-size: .88rem; }
+.account-switch-empty span:last-child { max-width: 34ch; color: var(--muted); font-size: .76rem; }
+.account-switch-add { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; }
+.account-switch-add > span { color: var(--accent); font-size: 1.15rem; }
+.account-switch-form { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--line); }
+.account-switch-form__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .88rem; }
+.account-switch-form__head .link-btn { flex: 0 0 auto; }
+:root[data-theme="dark"] #switch-account-btn.switch-account-btn:hover { background: var(--surface-soft) !important; }
+:root[data-theme="dark"] .account-switch-empty { background: var(--surface-soft); }
