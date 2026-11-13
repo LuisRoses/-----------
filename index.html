@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=account-switch-fix-2">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="header">
@@ -236,7 +236,6 @@
       <button id="menu-admin-support" type="button" hidden><span>✉</span> Обращения в поддержку <b id="admin-menu-ticket-count" class="nav-count">0</b></button>
     </nav>
     <div class="account-menu__bottom">
-      <button id="switch-account-btn" class="switch-account-btn" type="button"><span>⇄</span> Сменить аккаунт</button>
       <button id="logout-btn" class="logout-btn" type="button"><span>↪</span> Выйти из аккаунта</button>
     </div>
   </aside>
@@ -287,40 +286,6 @@
   </div>
 
   
-  <div id="account-switch-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="account-switch-title">
-    <div class="modal__box account-switch-modal__box">
-      <button id="account-switch-close" class="icon-btn modal__close" type="button" aria-label="Закрыть">✕</button>
-      <div class="auth-brand">Voltix</div>
-      <h2 id="account-switch-title">Сменить аккаунт</h2>
-      <p class="auth-intro">Выберите аккаунт, который уже использовали на этом устройстве.</p>
-      <div class="account-switch-section">
-        <div class="account-switch-section__head">
-          <strong>Сохранённые аккаунты</strong>
-          <span id="account-switch-count" class="account-switch-count">0</span>
-        </div>
-        <div id="account-switch-list" class="account-switch-list"></div>
-      </div>
-      <button id="account-switch-add-btn" class="btn btn--light btn--wide account-switch-add" type="button">
-        <span aria-hidden="true">＋</span> Добавить аккаунт
-      </button>
-      <form id="account-switch-form" class="form account-switch-form" hidden>
-        <div class="account-switch-form__head">
-          <strong id="account-switch-form-title">Войти в другой аккаунт</strong>
-          <button id="account-switch-cancel" class="link-btn" type="button">Отмена</button>
-        </div>
-        <label>Электронная почта
-          <input name="email" type="email" required autocomplete="username" placeholder="name@example.com">
-        </label>
-        <label>Пароль
-          <input name="password" type="password" required minlength="8" autocomplete="current-password" placeholder="Пароль аккаунта">
-        </label>
-        <button class="btn btn--wide" type="submit">Войти и переключиться</button>
-      </form>
-      <p id="account-switch-message" class="form-message" role="status" aria-live="polite"></p>
-      <p class="form-note">Список хранится только в этом браузере. Пароли не сохраняются. Можно добавить уже зарегистрированный аккаунт, подтвердив его пароль.</p>
-    </div>
-  </div>
-
   <div id="price-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="price-title">
     <div class="modal__box price-modal__box">
       <button id="price-close" class="icon-btn modal__close" type="button" aria-label="Закрыть">✕</button>
@@ -402,6 +367,6 @@
     </div>
   </div>
 
-  <script type="module" src="script.js?v=account-switch-fix-2"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>

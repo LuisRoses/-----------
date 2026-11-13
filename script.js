@@ -13,7 +13,6 @@ const STORAGE_KEYS = {
   cart: "voltix-cart",
   products: "voltix-user-products",
   accounts: "voltix-accounts",
-  recentAccounts: "voltix-recent-auth-accounts",
   theme: "voltix-theme"
 };
 
@@ -83,26 +82,6 @@ function loadUserProducts() {
 function loadAccounts() {
   const saved = readStorage(STORAGE_KEYS.accounts, []);
   return Array.isArray(saved) ? saved.filter((account) => account && account.id && account.email) : [];
-}
-
-function loadRecentAccounts() {
-  const saved = readStorage(STORAGE_KEYS.recentAccounts, []);
-  if (!Array.isArray(saved)) return [];
-  return saved.filter((account) => account && typeof account.email === "string")
-    .map((account) => ({
-      email: account.email.trim().toLowerCase(),
-      nickname: String(account.nickname || account.email).slice(0, 24)
-    }))
-    .filter((account) => account.email);
-}
-
-function rememberRecentAccount(account) {
-  const email = String(account?.email || "").trim().toLowerCase();
-  if (!email) return;
-  const nickname = String(account?.user_metadata?.nickname || account?.nickname || email.split("@")[0]).slice(0, 24);
-  const recent = loadRecentAccounts().filter((item) => item.email !== email);
-  recent.unshift({ email, nickname });
-  writeStorage(STORAGE_KEYS.recentAccounts, recent.slice(0, 6));
 }
 
 let cart = readStorage(STORAGE_KEYS.cart, {});
@@ -669,7 +648,6 @@ function syncCurrentUser(authUser) {
     return Promise.resolve();
   }
 
-  rememberRecentAccount(authUser);
   if (currentUser?.id === authUser.id && currentUser.roleLoaded) return Promise.resolve();
   if (pendingAuthSync?.id === authUser.id) return pendingAuthSync.promise;
 
@@ -754,7 +732,6 @@ async function handleRegister(event) {
       }
     });
     if (error) throw error;
-    rememberRecentAccount({ email, nickname });
     form.reset();
 
     if (result.session && result.user) {
@@ -807,111 +784,8 @@ function closeAccountMenu() {
   accountOverlay.classList.remove("is-open");
   const trigger = $("account-menu-btn");
   if (trigger) trigger.setAttribute("aria-expanded", "false");
-  if (!cartEl.classList.contains("is-open") && !modalEl.classList.contains("is-open") && !authModal.classList.contains("is-open") && !priceModal.classList.contains("is-open") && !$("account-switch-modal").classList.contains("is-open")) {
+  if (!cartEl.classList.contains("is-open") && !modalEl.classList.contains("is-open") && !authModal.classList.contains("is-open") && !priceModal.classList.contains("is-open")) {
     document.body.classList.remove("no-scroll");
-  }
-}
-
-function renderRecentAccountChoices() {
-  const list = $("account-switch-list");
-  const count = $("account-switch-count");
-  if (!list) return;
-
-  const recent = loadRecentAccounts();
-  if (count) count.textContent = String(recent.length);
-
-  if (!recent.length) {
-    list.innerHTML = `
-      <div class="account-switch-empty">
-        <span class="account-switch-empty__icon" aria-hidden="true">👤</span>
-        <strong>Пока нет сохранённых аккаунтов</strong>
-        <span>Нажмите «Добавить аккаунт», чтобы войти в другой аккаунт Voltix.</span>
-      </div>`;
-    return;
-  }
-
-  list.innerHTML = recent.map((account) => {
-    const isCurrent = account.email === String(currentUser?.email || "").toLowerCase();
-    return `
-      <button class="account-switch-item${isCurrent ? " is-current" : ""}" type="button"
-        data-switch-account-email="${escapeHTML(account.email)}" aria-label="Выбрать ${escapeHTML(account.email)}">
-        <span class="account-switch-item__avatar" aria-hidden="true">${escapeHTML(initials(account.nickname))}</span>
-        <span class="account-switch-item__text">
-          <strong>${escapeHTML(account.nickname)}</strong>
-          <small>${escapeHTML(account.email)}</small>
-        </span>
-        ${isCurrent ? `<span class="account-switch-current">Текущий</span>` : `<span class="account-switch-item__arrow" aria-hidden="true">›</span>`}
-      </button>`;
-  }).join("");
-}
-
-function showAccountSwitchForm(email = "") {
-  const form = $("account-switch-form");
-  if (!form) return;
-  form.reset();
-  form.hidden = false;
-  form.elements.email.value = email;
-  $("account-switch-form-title").textContent = email ? "Подтвердите вход в аккаунт" : "Добавить другой аккаунт";
-  $("account-switch-message").textContent = email ? "Введите пароль выбранного аккаунта." : "Введите email и пароль уже зарегистрированного аккаунта.";
-  $("account-switch-message").className = "form-message";
-  window.setTimeout(() => (email ? form.elements.password : form.elements.email).focus(), 50);
-}
-
-function openAccountSwitcher() {
-  try {
-    closeAccountMenu();
-    const form = $("account-switch-form");
-    if (!form) throw new Error("Не найдена форма переключения аккаунта. Обновите файлы сайта в GitHub Pages.");
-    form.reset();
-    form.hidden = true;
-    $("account-switch-message").textContent = "";
-    $("account-switch-message").className = "form-message";
-    renderRecentAccountChoices();
-    $("account-switch-modal").classList.add("is-open");
-    document.body.classList.add("no-scroll");
-    window.setTimeout(() => $("account-switch-add-btn")?.focus(), 60);
-  } catch (error) {
-    console.error("Не удалось открыть переключатель аккаунтов:", error);
-    showToast(error.message || "Не удалось открыть переключение аккаунта.", "error");
-  }
-}
-
-function closeAccountSwitcher() {
-  const switchModal = $("account-switch-modal");
-  if (switchModal) switchModal.classList.remove("is-open");
-  if (!modalEl.classList.contains("is-open") && !authModal.classList.contains("is-open") && !priceModal.classList.contains("is-open") && !cartEl.classList.contains("is-open") && !accountMenu.classList.contains("is-open") && !$("support-modal").classList.contains("is-open")) {
-    document.body.classList.remove("no-scroll");
-  }
-}
-
-async function handleAccountSwitch(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const data = new FormData(form);
-  const email = String(data.get("email") || "").trim().toLowerCase();
-  const password = String(data.get("password") || "");
-  const message = $("account-switch-message");
-  const submit = form.querySelector('button[type="submit"]');
-  if (!email || !password) return;
-  if (submit) submit.disabled = true;
-  message.textContent = "Подключаем выбранный аккаунт…";
-  message.className = "form-message";
-  try {
-    const { data: result, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    if (!result.user) throw new Error("Supabase не вернул данные выбранного аккаунта.");
-    rememberRecentAccount(result.user);
-    await syncCurrentUser(result.user);
-    closeAccountSwitcher();
-    form.reset();
-    showCatalog();
-    showToast(`Аккаунт переключён: ${currentUser?.nickname || email}`);
-  } catch (error) {
-    console.error("Не удалось переключить аккаунт:", error);
-    message.textContent = error.message || "Не удалось войти в выбранный аккаунт.";
-    message.className = "form-message form-message--error";
-  } finally {
-    if (submit) submit.disabled = false;
   }
 }
 
@@ -1156,7 +1030,7 @@ function openSupportModal() {
 
 function closeSupportModal() {
   $("support-modal").classList.remove("is-open");
-  if (!modalEl.classList.contains("is-open") && !authModal.classList.contains("is-open") && !priceModal.classList.contains("is-open") && !cartEl.classList.contains("is-open") && !accountMenu.classList.contains("is-open") && !$("account-switch-modal").classList.contains("is-open")) {
+  if (!modalEl.classList.contains("is-open") && !authModal.classList.contains("is-open") && !priceModal.classList.contains("is-open") && !cartEl.classList.contains("is-open") && !accountMenu.classList.contains("is-open")) {
     document.body.classList.remove("no-scroll");
   }
 }
@@ -1232,7 +1106,7 @@ function renderMySupportPage() {
       <div class="support-ticket-card__head"><div><span class="support-ticket-id">${escapeHTML(ticket.displayId)}</span><h3>${escapeHTML(ticket.title)}</h3></div><span class="ticket-status ticket-status--${getTicketStatusClass(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
       <p class="support-ticket-date">Создано: ${formatSupportDate(ticket.createdAt)}</p>
       <div class="support-thread">${(ticket.messages || []).map(messageMarkup).join("")}</div>
-      ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ответить поддержке<textarea name="message" required minlength="2" maxlength="2000" rows="3" placeholder="Напишите сообщение для поддержки Voltix..."></textarea></label><p class="support-reply-hint">Ваш ответ увидит администратор. Вы можете продолжить диалог здесь.</p><button class="btn btn--small" type="submit">Отправить сообщение</button><p class="support-reply-error" role="status" aria-live="polite"></p></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
+      ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ваш ответ<textarea name="message" required minlength="2" maxlength="2000" rows="2" placeholder="Напишите дополнительное сообщение..."></textarea></label><button class="btn btn--small" type="submit">Отправить</button></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
     </article>`).join("");
 }
 
@@ -1311,26 +1185,15 @@ async function showAdminSupportPage() {
 
 async function handleTicketReply(event, ticketId, sender) {
   event.preventDefault();
-  const form = event.currentTarget;
   const ticket = supportTickets.find((item) => item.id === ticketId);
-  if (!currentUser || !ticket) return;
-  if (ticket.status === "closed") {
-    showToast("Это обращение закрыто. Создайте новое, чтобы продолжить общение.", "error");
-    return;
-  }
-
+  if (!ticket || ticket.status === "closed" || !currentUser) return;
   const isAdmin = getUserRole(currentUser) === "admin";
-  // A customer can only reply to their own ticket; only admins can answer from the admin panel.
   if (sender === "admin" && !isAdmin) return;
   if (sender === "user" && (isAdmin || ticket.userId !== currentUser.id)) return;
-  if (sender !== (isAdmin ? "admin" : "user")) return;
-
-  const message = String(new FormData(form).get("message") || "").trim();
+  const message = String(new FormData(event.currentTarget).get("message") || "").trim();
   if (message.length < 2) return;
 
-  const submit = form.querySelector('button[type="submit"]');
-  const errorBox = form.querySelector(".support-reply-error");
-  if (errorBox) errorBox.textContent = "";
+  const submit = event.currentTarget.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
   try {
     const { error } = await supabaseClient.from("support_messages").insert({
@@ -1347,15 +1210,10 @@ async function handleTicketReply(event, ticketId, sender) {
       if (statusError) console.warn("Ответ отправлен, но статус не обновился:", statusError);
     }
     await loadSupportTickets({ quiet: true });
-    showToast(isAdmin ? "Ответ отправлен пользователю." : "Сообщение отправлено поддержке.");
+    showToast(isAdmin ? "Ответ отправлен пользователю." : "Сообщение отправлено.");
   } catch (error) {
     console.error("Не удалось отправить сообщение:", error);
-    const detail = error?.message || "Не удалось отправить сообщение.";
-    const friendly = error?.code === "42501"
-      ? "Supabase запретил отправку по RLS. Запустите fix-user-replies.sql в SQL Editor и попробуйте снова."
-      : detail;
-    if (errorBox) errorBox.textContent = friendly;
-    showToast(friendly, "error");
+    showToast(error.message || "Не удалось отправить сообщение.", "error");
   } finally {
     if (submit) submit.disabled = false;
   }
@@ -1528,46 +1386,6 @@ $("menu-my-products").addEventListener("click", showMyProducts);
 $("menu-add-product").addEventListener("click", showCreateProduct);
 $("menu-my-support").addEventListener("click", showMySupportPage);
 $("menu-admin-support").addEventListener("click", showAdminSupportPage);
-// Delegated click handler is resilient to menu re-rendering and dynamically changed content.
-document.addEventListener("click", (event) => {
-  const target = event.target instanceof Element ? event.target : null;
-  if (!target) return;
-
-  if (target.closest("#switch-account-btn")) {
-    event.preventDefault();
-    openAccountSwitcher();
-    return;
-  }
-
-  if (target.closest("#account-switch-add-btn")) {
-    event.preventDefault();
-    showAccountSwitchForm("");
-    return;
-  }
-
-  if (target.closest("#account-switch-cancel")) {
-    event.preventDefault();
-    $("account-switch-form").hidden = true;
-    $("account-switch-form").reset();
-    $("account-switch-message").textContent = "";
-    $("account-switch-add-btn")?.focus();
-    return;
-  }
-
-  const savedAccount = target.closest("[data-switch-account-email]");
-  if (savedAccount) {
-    const email = savedAccount.dataset.switchAccountEmail || "";
-    if (email.toLowerCase() === String(currentUser?.email || "").toLowerCase()) {
-      showToast("Этот аккаунт уже активен.");
-      return;
-    }
-    showAccountSwitchForm(email);
-  }
-});
-
-$("account-switch-close").addEventListener("click", closeAccountSwitcher);
-$("account-switch-modal").addEventListener("click", (event) => { if (event.target === $("account-switch-modal")) closeAccountSwitcher(); });
-$("account-switch-form").addEventListener("submit", handleAccountSwitch);
 $("logout-btn").addEventListener("click", logout);
 $("create-product-cta").addEventListener("click", showCreateProduct);
 $("my-products-back").addEventListener("click", showCatalog);
@@ -1591,7 +1409,7 @@ $("admin-support-list").addEventListener("click", (event) => {
 });
 $("my-support-list").addEventListener("submit", (event) => {
   const form = event.target.closest("[data-user-reply]");
-  if (form) void handleTicketReply(event, form.dataset.userReply, "user");
+  if (form) handleTicketReply(event, form.dataset.userReply, "user");
 });
 document.addEventListener("click", (event) => {
   const back = event.target.closest("[data-back-catalog]");
@@ -1637,7 +1455,6 @@ document.addEventListener("keydown", (event) => {
     closeAuth();
     closePriceEditor();
     closeSupportModal();
-    closeAccountSwitcher();
     closeAccountMenu();
   }
 });
