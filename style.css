@@ -578,3 +578,9 @@ html, body, .header, .card, .cart, .account-menu, .modal__box, .form--product, .
 /* Toast выше плавающей кнопки поддержки, чтобы элементы не перекрывались. */
 .toast { bottom: 98px; }
 @media (max-width: 520px) { .toast { right: 16px; bottom: 84px; max-width: calc(100% - 32px); } }
+
+
+.support-reply-hint { color: var(--muted); font-size: .76rem; line-height: 1.45; }
+.support-reply-error { color: #c33c4a; font-size: .8rem; line-height: 1.45; }
+:root[data-theme="dark"] .support-reply-error { color: #ff9ba5; }
+

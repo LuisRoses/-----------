@@ -1050,28 +1050,14 @@ async function handleSupportCreate(event) {
   const submit = event.currentTarget.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
   try {
-    const { data: ticket, error } = await supabaseClient
-      .from("support_tickets")
-      .insert({
-        user_id: currentUser.id,
-        user_name: currentUser.nickname,
-        user_email: currentUser.email,
-        subject: title,
-        description,
-        status: "open"
-      })
-      .select("id,user_id")
-      .single();
-    if (error) throw error;
-
-    const { error: messageError } = await supabaseClient.from("support_messages").insert({
-      ticket_id: ticket.id,
-      sender_id: currentUser.id,
-      sender_role: currentUser.isAdmin ? "admin" : "user",
-      sender_name: currentUser.isAdmin ? "Поддержка Voltix" : currentUser.nickname,
-      body: description
+    // The database creates the ticket and its first message in one secure RPC.
+    // Sender identity and role are derived from the authenticated Supabase session.
+    const { data: ticket, error } = await supabaseClient.rpc("create_support_ticket", {
+      p_subject: title,
+      p_description: description
     });
-    if (messageError) throw messageError;
+    if (error) throw error;
+    if (!ticket || !ticket.id) throw new Error("База данных не вернула номер обращения.");
 
     closeSupportModal();
     await loadSupportTickets({ quiet: true });
@@ -1106,7 +1092,7 @@ function renderMySupportPage() {
       <div class="support-ticket-card__head"><div><span class="support-ticket-id">${escapeHTML(ticket.displayId)}</span><h3>${escapeHTML(ticket.title)}</h3></div><span class="ticket-status ticket-status--${getTicketStatusClass(ticket.status)}">${getTicketStatusLabel(ticket.status)}</span></div>
       <p class="support-ticket-date">Создано: ${formatSupportDate(ticket.createdAt)}</p>
       <div class="support-thread">${(ticket.messages || []).map(messageMarkup).join("")}</div>
-      ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ваш ответ<textarea name="message" required minlength="2" maxlength="2000" rows="2" placeholder="Напишите дополнительное сообщение..."></textarea></label><button class="btn btn--small" type="submit">Отправить</button></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
+      ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ответить поддержке<textarea name="message" required minlength="2" maxlength="2000" rows="3" placeholder="Напишите сообщение для поддержки Voltix..."></textarea></label><p class="support-reply-hint">Ваш ответ увидит администратор. Вы можете продолжить диалог здесь.</p><button class="btn btn--small" type="submit">Отправить сообщение</button><p class="support-reply-error" role="status" aria-live="polite"></p></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
     </article>`).join("");
 }
 
@@ -1185,35 +1171,59 @@ async function showAdminSupportPage() {
 
 async function handleTicketReply(event, ticketId, sender) {
   event.preventDefault();
+  const form = event.currentTarget;
   const ticket = supportTickets.find((item) => item.id === ticketId);
-  if (!ticket || ticket.status === "closed" || !currentUser) return;
-  const isAdmin = getUserRole(currentUser) === "admin";
-  if (sender === "admin" && !isAdmin) return;
-  if (sender === "user" && (isAdmin || ticket.userId !== currentUser.id)) return;
-  const message = String(new FormData(event.currentTarget).get("message") || "").trim();
-  if (message.length < 2) return;
+  if (!currentUser || !ticket) {
+    showToast("Не удалось определить обращение. Обновите страницу.", "error");
+    return;
+  }
+  if (ticket.status === "closed") {
+    showToast("Это обращение закрыто. Создайте новое, чтобы продолжить общение.", "error");
+    return;
+  }
 
-  const submit = event.currentTarget.querySelector('button[type="submit"]');
+  const isAdmin = getUserRole(currentUser) === "admin";
+  if (sender === "admin" && !isAdmin) {
+    showToast("Отвечать от имени поддержки может только администратор.", "error");
+    return;
+  }
+  if (sender === "user" && (isAdmin || ticket.userId !== currentUser.id)) {
+    showToast("Вы можете отвечать только в собственном обращении.", "error");
+    return;
+  }
+  if (sender !== "admin" && sender !== "user") return;
+
+  const message = String(new FormData(form).get("message") || "").trim();
+  if (message.length < 2) {
+    showToast("Сообщение должно содержать хотя бы 2 символа.", "error");
+    return;
+  }
+
+  const submit = form.querySelector('button[type="submit"]');
+  const errorBox = form.querySelector(".support-reply-error");
+  if (errorBox) errorBox.textContent = "";
   if (submit) submit.disabled = true;
+
   try {
-    const { error } = await supabaseClient.from("support_messages").insert({
-      ticket_id: ticket.id,
-      sender_id: currentUser.id,
-      sender_role: isAdmin ? "admin" : "user",
-      sender_name: isAdmin ? "Поддержка Voltix" : currentUser.nickname,
-      body: message
+    // The RPC derives sender_id and sender_role from auth.uid() and the private admin registry.
+    // This avoids fragile client-side INSERT policies and prevents role spoofing.
+    const { error } = await supabaseClient.rpc("send_support_message", {
+      p_ticket_id: ticket.id,
+      p_body: message
     });
     if (error) throw error;
 
-    if (isAdmin) {
-      const { error: statusError } = await supabaseClient.from("support_tickets").update({ status: "waiting" }).eq("id", ticket.id);
-      if (statusError) console.warn("Ответ отправлен, но статус не обновился:", statusError);
-    }
-    await loadSupportTickets({ quiet: true });
-    showToast(isAdmin ? "Ответ отправлен пользователю." : "Сообщение отправлено.");
+    form.reset();
+    await loadSupportTickets({ quiet: false });
+    showToast(isAdmin ? "Ответ отправлен пользователю." : "Сообщение отправлено поддержке.");
   } catch (error) {
-    console.error("Не удалось отправить сообщение:", error);
-    showToast(error.message || "Не удалось отправить сообщение.", "error");
+    console.error("Не удалось отправить сообщение в тикет:", error);
+    const detail = error?.message || "Не удалось отправить сообщение.";
+    const friendly = error?.code === "42501"
+      ? "У аккаунта нет прав на отправку. Проверьте, что новый SQL-скрипт выполнен в Supabase."
+      : detail;
+    if (errorBox) errorBox.textContent = friendly;
+    showToast(friendly, "error");
   } finally {
     if (submit) submit.disabled = false;
   }
@@ -1409,7 +1419,7 @@ $("admin-support-list").addEventListener("click", (event) => {
 });
 $("my-support-list").addEventListener("submit", (event) => {
   const form = event.target.closest("[data-user-reply]");
-  if (form) handleTicketReply(event, form.dataset.userReply, "user");
+  if (form) void handleTicketReply(event, form.dataset.userReply, "user");
 });
 document.addEventListener("click", (event) => {
   const back = event.target.closest("[data-back-catalog]");
