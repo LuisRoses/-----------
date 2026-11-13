@@ -1093,7 +1093,6 @@ function renderMySupportPage() {
       <p class="support-ticket-date">Создано: ${formatSupportDate(ticket.createdAt)}</p>
       <div class="support-thread">${(ticket.messages || []).map(messageMarkup).join("")}</div>
       ${ticket.status !== "closed" ? `<form class="support-reply-form" data-user-reply="${escapeHTML(ticket.id)}"><label>Ответить поддержке<textarea name="message" required minlength="2" maxlength="2000" rows="3" placeholder="Напишите сообщение для поддержки Voltix..."></textarea></label><p class="support-reply-hint">Ваш ответ увидит администратор. Вы можете продолжить диалог здесь.</p><button class="btn btn--small" type="submit">Отправить сообщение</button><p class="support-reply-error" role="status" aria-live="polite"></p></form>` : `<p class="support-closed-note">Обращение закрыто. Создайте новое обращение, если понадобится помощь.</p>`}
-      <div class="support-ticket-card__actions"><button class="btn btn--small btn--danger" type="button" data-delete-ticket="${escapeHTML(ticket.id)}">Удалить обращение</button></div>
     </article>`).join("");
 }
 
@@ -1160,20 +1159,14 @@ function renderAdminTicketDetail() {
 }
 
 async function handleSupportTicketDelete(ticketId, button = null) {
-  if (!currentUser) {
-    showToast("Войдите в аккаунт, чтобы удалить обращение.", "error");
+  if (!currentUser || getUserRole(currentUser) !== "admin") {
+    showToast("Удалять обращения может только администратор.", "error");
     return;
   }
 
   const ticket = supportTickets.find((item) => item.id === ticketId);
   if (!ticket) {
     showToast("Обращение уже удалено или недоступно. Обновите страницу.", "error");
-    return;
-  }
-
-  const isAdmin = getUserRole(currentUser) === "admin";
-  if (!isAdmin && ticket.userId !== currentUser.id) {
-    showToast("Можно удалить только собственное обращение.", "error");
     return;
   }
 
@@ -1468,11 +1461,6 @@ $("admin-support-list").addEventListener("click", (event) => {
 $("my-support-list").addEventListener("submit", (event) => {
   const form = event.target.closest("[data-user-reply]");
   if (form) void handleTicketReply(event, form.dataset.userReply, "user");
-});
-$("my-support-list").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-delete-ticket]");
-  if (!button) return;
-  void handleSupportTicketDelete(button.dataset.deleteTicket, button);
 });
 document.addEventListener("click", (event) => {
   const back = event.target.closest("[data-back-catalog]");
